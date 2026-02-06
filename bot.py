@@ -72,6 +72,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # ── Step 1: Get current balance ──
     current_balance = exchange.get_balance()
     if current_balance <= 0:
+        # Retry once — connection may have gone stale
+        logger.warning("Balance fetch failed or zero, reloading markets and retrying...")
+        exchange.load_markets()
+        current_balance = exchange.get_balance()
+    if current_balance <= 0:
         logger.error("Balance is zero, skipping cycle")
         return
 
