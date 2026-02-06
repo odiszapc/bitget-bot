@@ -1,0 +1,25 @@
+{
+  "api_key": "YOUR_API_KEY",
+  "api_secret": "YOUR_API_SECRET",
+  "passphrase": "YOUR_PASSPHRASE",
+  "leverage": 10,
+  "max_positions": 5,
+  "timeframe": "15m",
+  "min_volume_usd": 5000000,
+  "max_atr_pct": 15.0,
+  "min_stop_pct": 2.0,
+  "min_tp_pct": 5.0,
+  "daily_loss_limit_pct": 5.0,
+  "btc_bull_limit_pct": 5.0,
+  "cycle_minutes": 15,
+  "trailing_start_pct": 3.0,
+  "trailing_distance_pct": 2.0,
+  "min_signals": 3,
+  "demo": true,
+  "news_blackout_minutes": 30,
+  "news_events": [
+    {"date": "2026-03-18", "time": "18:00", "event": "FOMC Decision"},
+    {"date": "2026-04-10", "time": "12:30", "event": "CPI Release"},
+    {"date": "2026-04-03", "time": "12:30", "event": "Non-Farm Payrolls"}
+  ]
+}
