@@ -106,20 +106,16 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         logger.info(f"  {reason}")
 
     if not all_safe:
-        logger.info("Safety check failed, skipping trade search")
-        logger.info(get_stats(state))
-        save_state(state)
-        cycle_info = {"checks": reasons, "outcome": "Safety check failed, skipping trade search", "cycle_minutes": cycle_minutes}
-        generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
-        return
+        logger.info("Safety check failed, skipping trade execution")
 
-    # ── Step 5: Scan market ──
+    # ── Step 5: Scan market (always runs for analysis) ──
     config = risk.config
     timeframe = config.get("timeframe", "15m")
     min_volume = config.get("min_volume_usd", 5_000_000)
     max_atr = config.get("max_atr_pct", 15.0)
     min_signals = config.get("min_signals", 3)
 
+    scan_results = []
     symbols = exchange.get_usdt_futures_symbols()
 
     # Filter by volume using tickers
@@ -132,15 +128,14 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         )
     except Exception as e:
         logger.error(f"Error fetching tickers: {e}")
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes}
+        logger.info(get_stats(state))
+        save_state(state)
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": []}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
     # ── Step 6: Analyze each symbol ──
-    candidates = []
-
     for symbol in liquid_symbols:
-        # Skip if we already have a position
         if symbol in state["positions"]:
             continue
 
@@ -149,108 +144,100 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         if df is None:
             continue
 
-        # ATR volatility filter
         atr_pct = calculate_atr(df)
         if atr_pct > max_atr:
             continue
 
-        # Get funding rate
         funding_rate = exchange.get_funding_rate(symbol)
-
-        # Analyze signals
         analysis = analyze_symbol(df, funding_rate, config)
 
-        if analysis["signal_count"] >= min_signals:
-            candidates.append(
-                {
-                    "symbol": symbol,
-                    "analysis": analysis,
-                    "atr_pct": atr_pct,
-                }
-            )
-            logger.info(
-                f"  🎯 {symbol}: {analysis['signal_count']} signals "
-                f"({', '.join(analysis['signals'])})"
-            )
-            for detail in analysis["details"]:
-                logger.info(f"      {detail}")
+        if analysis["signal_count"] >= 1:
+            scan_results.append({
+                "symbol": symbol,
+                "rsi": analysis["rsi"],
+                "atr_pct": atr_pct,
+                "funding_rate": funding_rate or 0,
+                "signal_count": analysis["signal_count"],
+                "signals": analysis["signals"],
+                "details": analysis["details"],
+            })
 
-        # Rate limiting: small delay between API calls
         time.sleep(0.1)
 
-    if not candidates:
-        logger.info("No trade signals found this cycle")
-        logger.info(get_stats(state))
-        save_state(state)
-        cycle_info = {"checks": reasons, "outcome": "No trade signals found this cycle", "cycle_minutes": cycle_minutes}
-        generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
-        return
+    # ── Step 7: Sort and log scan results ──
+    scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
+    scan_results = scan_results[:20]  # Top 20
 
-    # ── Step 7: Select best candidate ──
-    # Sort by RSI (highest = most overbought = best short candidate)
-    candidates.sort(key=lambda c: c["analysis"]["rsi"], reverse=True)
-    best = candidates[0]
+    logger.info(f"Market scan: {len(scan_results)} pairs with signals")
+    for sr in scan_results:
+        logger.info(
+            f"  {'🎯' if sr['signal_count'] >= min_signals else '  '} "
+            f"{sr['symbol']}: {sr['signal_count']}/4 signals "
+            f"[{', '.join(sr['signals'])}] "
+            f"RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
+            f"FR={sr['funding_rate']*100:.4f}%"
+        )
 
-    symbol = best["symbol"]
-    atr_pct = best["atr_pct"]
-    logger.info(f"Best candidate: {symbol} (RSI={best['analysis']['rsi']:.1f})")
+    # ── Step 8: Execute trade (only if safe) ──
+    candidates = [s for s in scan_results if s["signal_count"] >= min_signals]
+    outcome = ""
 
-    # ── Step 8: Calculate position size ──
-    margin = risk.calculate_position_size(current_balance, open_short_count)
-    if margin <= 0:
-        logger.warning("Position size is zero, skipping")
-        save_state(state)
-        cycle_info = {"checks": reasons, "outcome": "Position size is zero, skipping", "cycle_minutes": cycle_minutes}
-        generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
-        return
-
-    # ── Step 9: Calculate SL/TP ──
-    ticker = exchange.get_ticker(symbol)
-    if not ticker:
-        save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Could not fetch ticker for {symbol}", "cycle_minutes": cycle_minutes}
-        generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
-        return
-
-    entry_price = ticker["last"]
-    sl_price, tp_price = calculate_sl_tp(entry_price, atr_pct, config)
-
-    sl_pct = abs(sl_price - entry_price) / entry_price * 100
-    tp_pct = abs(entry_price - tp_price) / entry_price * 100
-
-    logger.info(
-        f"Trade plan: SHORT {symbol} @ {entry_price} | "
-        f"SL={sl_price} ({sl_pct:.1f}%) | TP={tp_price} ({tp_pct:.1f}%) | "
-        f"Margin={margin:.2f} USDT"
-    )
-
-    # ── Step 10: Execute trade ──
-    if dry_run:
-        logger.info("DRY RUN — order not placed")
-        position = {
-            "order_id": "dry-run",
-            "symbol": symbol,
-            "entry_price": entry_price,
-            "amount": 0,
-            "margin_usdt": margin,
-            "stop_loss": sl_price,
-            "take_profit": tp_price,
-            "timestamp": time.time(),
-        }
+    if not all_safe:
+        outcome = "Safety check failed, trade execution skipped"
+    elif not candidates:
+        outcome = "No trade signals found this cycle"
     else:
-        position = exchange.open_short(symbol, margin, sl_price, tp_price)
+        best = candidates[0]
+        symbol = best["symbol"]
+        atr_pct = best["atr_pct"]
+        logger.info(f"Best candidate: {symbol} (RSI={best['rsi']:.1f})")
 
-    if position:
-        add_position(state, position)
-        outcome = f"Opened SHORT {symbol}"
-        logger.info(f"✅ Short opened: {symbol}")
-    else:
-        outcome = f"Failed to open short for {symbol}"
-        logger.error(outcome)
+        margin = risk.calculate_position_size(current_balance, open_short_count)
+        if margin <= 0:
+            outcome = "Position size is zero, skipping"
+        else:
+            ticker = exchange.get_ticker(symbol)
+            if not ticker:
+                outcome = f"Could not fetch ticker for {symbol}"
+            else:
+                entry_price = ticker["last"]
+                sl_price, tp_price = calculate_sl_tp(entry_price, atr_pct, config)
+
+                sl_pct = abs(sl_price - entry_price) / entry_price * 100
+                tp_pct = abs(entry_price - tp_price) / entry_price * 100
+
+                logger.info(
+                    f"Trade plan: SHORT {symbol} @ {entry_price} | "
+                    f"SL={sl_price} ({sl_pct:.1f}%) | TP={tp_price} ({tp_pct:.1f}%) | "
+                    f"Margin={margin:.2f} USDT"
+                )
+
+                if dry_run:
+                    logger.info("DRY RUN — order not placed")
+                    position = {
+                        "order_id": "dry-run",
+                        "symbol": symbol,
+                        "entry_price": entry_price,
+                        "amount": 0,
+                        "margin_usdt": margin,
+                        "stop_loss": sl_price,
+                        "take_profit": tp_price,
+                        "timestamp": time.time(),
+                    }
+                else:
+                    position = exchange.open_short(symbol, margin, sl_price, tp_price)
+
+                if position:
+                    add_position(state, position)
+                    outcome = f"Opened SHORT {symbol}"
+                    logger.info(f"✅ Short opened: {symbol}")
+                else:
+                    outcome = f"Failed to open short for {symbol}"
+                    logger.error(outcome)
 
     logger.info(get_stats(state))
     save_state(state)
-    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes}
+    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results}
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
 

@@ -127,6 +127,56 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 """
 
+    # Build market scan section
+    scan_section = ""
+    if cycle_info and cycle_info.get("scan_results"):
+        sr_list = cycle_info["scan_results"]
+        min_signals = 3
+
+        scan_rows = ""
+        for sr in sr_list:
+            sc = sr["signal_count"]
+            if sc >= 3:
+                count_class = "positive"
+            elif sc == 2:
+                count_class = "warning"
+            else:
+                count_class = "neutral"
+
+            base, quote = _format_symbol(sr["symbol"])
+            signals_str = ", ".join(sr["signals"]) if sr["signals"] else "-"
+            fr = sr.get("funding_rate", 0)
+
+            scan_rows += f"""
+            <tr{"  class='best-candidate'" if sr is sr_list[0] and sc >= min_signals else ""}>
+                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
+                <td>{sr['rsi']:.1f}</td>
+                <td>{sr['atr_pct']:.1f}%</td>
+                <td>{fr*100:.4f}%</td>
+                <td class="{count_class}">{sc}/4</td>
+                <td>{_esc(signals_str)}</td>
+            </tr>"""
+
+        scan_section = f"""
+<h2>Market Scan ({len(sr_list)} pairs)</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>RSI</th>
+            <th>ATR</th>
+            <th>Funding</th>
+            <th>Signals</th>
+            <th>Details</th>
+        </tr>
+    </thead>
+    <tbody>
+        {scan_rows}
+    </tbody>
+</table>
+<div style="height:28px"></div>
+"""
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -178,7 +228,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .positive {{ color: #3fb950; }}
     .negative {{ color: #f85149; }}
+    .warning {{ color: #d29922; }}
     .neutral {{ color: #c9d1d9; }}
+    .best-candidate {{
+        background: #1a2233;
+        border-left: 3px solid #58a6ff;
+    }}
     h2 {{
         font-size: 15px;
         color: #8b949e;
@@ -331,6 +386,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 
 {cycle_section}
+
+{scan_section}
 
 <h2>Open Positions ({len(positions)})</h2>
 <table>
