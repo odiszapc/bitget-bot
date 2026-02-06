@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = "output"
 
 
-def generate_report(state: dict, exchange_positions: list[dict], current_balance: float, exchange=None):
+def generate_report(state: dict, exchange_positions: list[dict], current_balance: float, exchange=None, cycle_info: dict = None):
     """Generate output/index.html with current stats and open positions."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+    now_iso = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     total_trades = state.get("total_trades", 0)
     total_wins = state.get("total_wins", 0)
@@ -90,6 +92,40 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     daily_class = "positive" if daily_pnl >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
+
+    # Build cycle info section
+    cycle_section = ""
+    cycle_minutes_js = 15
+    if cycle_info:
+        cycle_minutes_js = cycle_info.get("cycle_minutes", 15)
+        checks = cycle_info.get("checks", [])
+        outcome = cycle_info.get("outcome", "")
+
+        checks_html = ""
+        for check in checks:
+            if check.startswith("✅"):
+                checks_html += f'<div class="check pass">{_esc(check)}</div>\n'
+            elif check.startswith("❌"):
+                checks_html += f'<div class="check fail">{_esc(check)}</div>\n'
+            else:
+                checks_html += f'<div class="check">{_esc(check)}</div>\n'
+
+        outcome_class = "negative" if "fail" in outcome.lower() or "error" in outcome.lower() else "positive"
+
+        cycle_section = f"""
+<div class="cycle-panel">
+    <div class="cycle-header">
+        <h2>Last Cycle</h2>
+        <div class="cycle-time">{now}</div>
+    </div>
+    <div class="checks">{checks_html}</div>
+    <div class="outcome {outcome_class}">{_esc(outcome)}</div>
+    <div class="countdown-row">
+        <span class="countdown-label">Next cycle in</span>
+        <span class="countdown" id="countdown">--:--</span>
+    </div>
+</div>
+"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -189,6 +225,63 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     tr:hover {{
         background: #1c2128;
     }}
+    .cycle-panel {{
+        background: #161b22;
+        border: 1px solid #21262d;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 28px;
+    }}
+    .cycle-header {{
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 12px;
+    }}
+    .cycle-header h2 {{
+        margin-bottom: 0;
+    }}
+    .cycle-time {{
+        font-size: 12px;
+        color: #484f58;
+    }}
+    .checks {{
+        margin-bottom: 10px;
+    }}
+    .check {{
+        font-size: 13px;
+        padding: 3px 0;
+        color: #8b949e;
+    }}
+    .check.pass {{
+        color: #3fb950;
+    }}
+    .check.fail {{
+        color: #f85149;
+    }}
+    .outcome {{
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 0;
+        border-top: 1px solid #21262d;
+    }}
+    .countdown-row {{
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding-top: 10px;
+        border-top: 1px solid #21262d;
+        margin-top: 8px;
+    }}
+    .countdown-label {{
+        font-size: 12px;
+        color: #484f58;
+    }}
+    .countdown {{
+        font-size: 20px;
+        font-weight: 700;
+        color: #58a6ff;
+    }}
     .footer {{
         margin-top: 32px;
         font-size: 11px;
@@ -237,6 +330,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>
 
+{cycle_section}
+
 <h2>Open Positions ({len(positions)})</h2>
 <table>
     <thead>
@@ -259,6 +354,29 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </table>
 
 <div class="footer">Auto-refreshes every 60s</div>
+
+<script>
+(function() {{
+    var cycleMinutes = {cycle_minutes_js};
+    var generatedAt = new Date("{now_iso}");
+    var nextCycle = new Date(generatedAt.getTime() + cycleMinutes * 60 * 1000);
+    var el = document.getElementById("countdown");
+    if (!el) return;
+    function tick() {{
+        var diff = Math.floor((nextCycle - Date.now()) / 1000);
+        if (diff <= 0) {{
+            el.textContent = "now";
+            el.style.color = "#3fb950";
+            return;
+        }}
+        var m = Math.floor(diff / 60);
+        var s = diff % 60;
+        el.textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }}
+    tick();
+    setInterval(tick, 1000);
+}})();
+</script>
 
 </body>
 </html>"""
