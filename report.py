@@ -190,7 +190,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="60">
 <title>Bitget Short Bot</title>
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -428,7 +427,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </tbody>
 </table>
 
-<div class="footer">Auto-refreshes every 60s</div>
+<div class="footer">Auto-refreshes when cycle completes</div>
 
 <script>
 (function() {{
@@ -437,11 +436,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     var nextCycle = new Date(generatedAt.getTime() + cycleMinutes * 60 * 1000);
     var el = document.getElementById("countdown");
     if (!el) return;
+    var refreshTimer = null;
     function tick() {{
         var diff = Math.floor((nextCycle - Date.now()) / 1000);
         if (diff <= 0) {{
-            el.textContent = "now";
+            el.textContent = "waiting for update...";
             el.style.color = "#3fb950";
+            if (!refreshTimer) {{
+                refreshTimer = setInterval(function() {{
+                    location.reload();
+                }}, 5000);
+            }}
             return;
         }}
         var m = Math.floor(diff / 60);
