@@ -402,10 +402,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>
 
-{cycle_section}
-
-{scan_section}
-
 <h2>Open Positions ({len(positions)})</h2>
 <table>
     <thead>
@@ -426,6 +422,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         {position_rows}
     </tbody>
 </table>
+<div style="height:28px"></div>
+
+{cycle_section}
+
+{scan_section}
 
 <div class="footer">Auto-refreshes when cycle completes</div>
 
