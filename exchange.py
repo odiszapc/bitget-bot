@@ -101,6 +101,7 @@ class Exchange:
                             "side": pos["side"],
                             "contracts": contracts,
                             "entry_price": float(pos.get("entryPrice", 0)),
+                            "mark_price": float(pos.get("markPrice", 0) or 0),
                             "unrealized_pnl": float(
                                 pos.get("unrealizedPnl", 0)
                             ),

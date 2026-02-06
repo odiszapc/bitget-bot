@@ -47,15 +47,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             ep = exch_lookup.get(symbol, {})
             unrealized_pnl = ep.get("unrealized_pnl", 0)
             pnl_pct = ep.get("percentage", 0)
-            current_price = ep.get("entry_price", entry_price)
+            current_price = ep.get("mark_price", 0) or entry_price
             leverage = ep.get("leverage", 0)
             total_unrealized += unrealized_pnl
 
             pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
 
+            base, quote = _format_symbol(symbol)
+
             position_rows += f"""
             <tr>
-                <td class="symbol">{_esc(symbol)}</td>
+                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
                 <td>{entry_price}</td>
                 <td>{current_price}</td>
                 <td>{leverage}x</td>
@@ -159,6 +161,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         color: #58a6ff;
         font-weight: 600;
     }}
+    td.symbol .quote {{
+        color: #484f58;
+        font-weight: 400;
+    }}
     td.empty {{
         text-align: center;
         color: #484f58;
@@ -248,6 +254,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         logger.info(f"Report written to {path}")
     except IOError as e:
         logger.error(f"Error writing report: {e}")
+
+
+def _format_symbol(symbol: str) -> tuple[str, str]:
+    """
+    Split 'GRT/USDT:USDT' into ('GRT', 'USDT').
+    Strips the ':USDT' settlement suffix and splits on '/'.
+    """
+    clean = symbol.split(":")[0]  # 'GRT/USDT'
+    parts = clean.split("/")
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return clean, ""
 
 
 def _esc(s: str) -> str:
