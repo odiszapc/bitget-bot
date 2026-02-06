@@ -95,6 +95,9 @@ class Exchange:
             for pos in positions:
                 contracts = float(pos.get("contracts", 0))
                 if contracts > 0:
+                    info = pos.get("info", {})
+                    tp_raw = info.get("takeProfit", "") or ""
+                    sl_raw = info.get("stopLoss", "") or ""
                     open_positions.append(
                         {
                             "symbol": pos["symbol"],
@@ -112,12 +115,37 @@ class Exchange:
                             ),
                             "notional": float(pos.get("notional", 0)),
                             "percentage": float(pos.get("percentage", 0)),
+                            "take_profit": float(tp_raw) if tp_raw else 0,
+                            "stop_loss": float(sl_raw) if sl_raw else 0,
                         }
                     )
             return open_positions
         except Exception as e:
             logger.error(f"Error fetching positions: {e}")
             return []
+
+    def get_tp_sl_for_symbol(self, symbol: str) -> dict:
+        """
+        Fetch pending TP/SL plan orders for a symbol.
+        Bitget stores position TP/SL as planType 'profit_loss'.
+        Returns {'tp': float|None, 'sl': float|None}.
+        """
+        result = {"tp": None, "sl": None}
+        try:
+            orders = self.exchange.fetch_open_orders(symbol, params={
+                "planType": "profit_loss",
+                "trigger": True,
+            })
+            for o in orders:
+                info = o.get("info", {})
+                plan_type = info.get("planType", "")
+                if plan_type == "profit_plan":
+                    result["tp"] = o.get("takeProfitPrice") or o.get("triggerPrice")
+                elif plan_type == "loss_plan":
+                    result["sl"] = o.get("stopLossPrice") or o.get("triggerPrice")
+        except Exception as e:
+            logger.debug(f"Could not fetch TP/SL orders for {symbol}: {e}")
+        return result
 
     def set_leverage(self, symbol: str, leverage: int):
         """Set leverage for a symbol."""

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = "output"
 
 
-def generate_report(state: dict, exchange_positions: list[dict], current_balance: float):
+def generate_report(state: dict, exchange_positions: list[dict], current_balance: float, exchange=None):
     """Generate output/index.html with current stats and open positions."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -41,10 +41,26 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             margin = pos.get("margin_usdt", 0)
             sl = pos.get("current_sl") or pos.get("stop_loss", 0)
             tp = pos.get("take_profit", 0)
+
+            # Override with live TP/SL: position fields first, then plan orders
+            ep = exch_lookup.get(symbol, {})
+            if ep.get("take_profit"):
+                tp = ep["take_profit"]
+            if ep.get("stop_loss"):
+                sl = ep["stop_loss"]
+            if exchange and (not tp or not sl):
+                try:
+                    tp_sl = exchange.get_tp_sl_for_symbol(symbol)
+                    if not tp and tp_sl["tp"]:
+                        tp = float(tp_sl["tp"])
+                    if not sl and tp_sl["sl"]:
+                        sl = float(tp_sl["sl"])
+                except Exception:
+                    pass
+
             opened_ts = pos.get("opened_at", 0)
             opened_str = datetime.fromtimestamp(opened_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M") if opened_ts else "-"
 
-            ep = exch_lookup.get(symbol, {})
             unrealized_pnl = ep.get("unrealized_pnl", 0)
             pnl_pct = ep.get("percentage", 0)
             current_price = ep.get("mark_price", 0) or entry_price

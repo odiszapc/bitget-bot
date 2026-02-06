@@ -81,7 +81,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     # ── Step 2: Sync positions with exchange ──
     exchange_positions = exchange.get_open_positions()
-    sync_positions_with_exchange(state, exchange_positions)
+    sync_positions_with_exchange(state, exchange_positions, exchange)
 
     open_short_count = len(
         [p for p in exchange_positions if p["side"] == "short"]
@@ -107,7 +107,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         logger.info("Safety check failed, skipping trade search")
         logger.info(get_stats(state))
         save_state(state)
-        generate_report(state, exchange_positions, current_balance)
+        generate_report(state, exchange_positions, current_balance, exchange)
         return
 
     # ── Step 5: Scan market ──
@@ -129,7 +129,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         )
     except Exception as e:
         logger.error(f"Error fetching tickers: {e}")
-        generate_report(state, exchange_positions, current_balance)
+        generate_report(state, exchange_positions, current_balance, exchange)
         return
 
     # ── Step 6: Analyze each symbol ──
@@ -178,7 +178,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         logger.info("No trade signals found this cycle")
         logger.info(get_stats(state))
         save_state(state)
-        generate_report(state, exchange_positions, current_balance)
+        generate_report(state, exchange_positions, current_balance, exchange)
         return
 
     # ── Step 7: Select best candidate ──
@@ -195,14 +195,14 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     if margin <= 0:
         logger.warning("Position size is zero, skipping")
         save_state(state)
-        generate_report(state, exchange_positions, current_balance)
+        generate_report(state, exchange_positions, current_balance, exchange)
         return
 
     # ── Step 9: Calculate SL/TP ──
     ticker = exchange.get_ticker(symbol)
     if not ticker:
         save_state(state)
-        generate_report(state, exchange_positions, current_balance)
+        generate_report(state, exchange_positions, current_balance, exchange)
         return
 
     entry_price = ticker["last"]
@@ -241,7 +241,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     logger.info(get_stats(state))
     save_state(state)
-    generate_report(state, exchange_positions, current_balance)
+    generate_report(state, exchange_positions, current_balance, exchange)
 
 
 def manage_trailing_stops(
