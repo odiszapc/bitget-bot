@@ -151,16 +151,15 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         funding_rate = exchange.get_funding_rate(symbol)
         analysis = analyze_symbol(df, funding_rate, config)
 
-        if analysis["signal_count"] >= 1:
-            scan_results.append({
-                "symbol": symbol,
-                "rsi": analysis["rsi"],
-                "atr_pct": atr_pct,
-                "funding_rate": funding_rate or 0,
-                "signal_count": analysis["signal_count"],
-                "signals": analysis["signals"],
-                "details": analysis["details"],
-            })
+        scan_results.append({
+            "symbol": symbol,
+            "rsi": analysis["rsi"],
+            "atr_pct": atr_pct,
+            "funding_rate": funding_rate or 0,
+            "signal_count": analysis["signal_count"],
+            "signals": analysis["signals"],
+            "details": analysis["details"],
+        })
 
         time.sleep(0.1)
 

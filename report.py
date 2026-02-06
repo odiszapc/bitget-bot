@@ -138,19 +138,27 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             sc = sr["signal_count"]
             if sc >= 3:
                 count_class = "positive"
+                row_class = "best-candidate" if sr is sr_list[0] else "scan-hot"
             elif sc == 2:
                 count_class = "warning"
-            else:
+                row_class = ""
+            elif sc == 1:
                 count_class = "neutral"
+                row_class = ""
+            else:
+                count_class = "muted"
+                row_class = "scan-dim"
 
             base, quote = _format_symbol(sr["symbol"])
             signals_str = ", ".join(sr["signals"]) if sr["signals"] else "-"
             fr = sr.get("funding_rate", 0)
 
+            rsi_class = "positive" if sr["rsi"] > 70 else ("warning" if sr["rsi"] > 60 else "")
+
             scan_rows += f"""
-            <tr{"  class='best-candidate'" if sr is sr_list[0] and sc >= min_signals else ""}>
+            <tr class="{row_class}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
-                <td>{sr['rsi']:.1f}</td>
+                <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
                 <td class="{count_class}">{sc}/4</td>
@@ -230,9 +238,19 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .negative {{ color: #f85149; }}
     .warning {{ color: #d29922; }}
     .neutral {{ color: #c9d1d9; }}
+    .muted {{ color: #30363d; }}
     .best-candidate {{
         background: #1a2233;
         border-left: 3px solid #58a6ff;
+    }}
+    .scan-hot {{
+        background: #1a2a1a;
+    }}
+    .scan-dim td {{
+        color: #484f58;
+    }}
+    .scan-dim td.symbol {{
+        color: #484f58;
     }}
     h2 {{
         font-size: 15px;
