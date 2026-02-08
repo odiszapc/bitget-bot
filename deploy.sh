@@ -3,6 +3,9 @@ set -e
 
 cd /home/odiszapc/bitget-bot
 
+# Ensure GitHub is in known_hosts
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+
 # Clone or pull
 if [ -d .git ]; then
     git pull
