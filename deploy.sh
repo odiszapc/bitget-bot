@@ -7,11 +7,10 @@ cd /home/odiszapc/bitget-bot
 if [ -d .git ]; then
     git pull
 else
-    git clone git@github.com:odiszapc/bitget-bot.git tmp
-    mv tmp/.git .
-    mv tmp/* . 2>/dev/null || true
-    mv tmp/.* . 2>/dev/null || true
-    rm -rf tmp
+    git init
+    git remote add origin git@github.com:odiszapc/bitget-bot.git
+    git fetch origin
+    git checkout -f origin/main -B main
 fi
 
 # Ensure data dirs exist
