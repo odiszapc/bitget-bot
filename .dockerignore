@@ -1,0 +1,10 @@
+venv/
+.git/
+__pycache__/
+config.json
+state.json
+logs/
+output/
+data/
+.claude/
+*.pyc

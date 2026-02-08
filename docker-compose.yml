@@ -1,0 +1,21 @@
+services:
+  bot:
+    build: .
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./data/state.json:/app/state.json
+      - ./data/logs:/app/logs
+      - ./data/output:/app/output
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./data/output:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - bot
