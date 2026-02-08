@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 OUTPUT_DIR = "output"
 
 
+def _load_version() -> str:
+    try:
+        with open("version.txt", "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "unknown"
+
+
 def generate_report(state: dict, exchange_positions: list[dict], current_balance: float, exchange=None, cycle_info: dict = None):
     """Generate output/index.html with current stats and open positions."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -428,7 +436,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 {scan_section}
 
-<div class="footer">Auto-refreshes when cycle completes</div>
+<div class="footer">{_esc(_load_version())} | Auto-refreshes when cycle completes</div>
 
 <script>
 (function() {{

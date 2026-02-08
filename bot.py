@@ -286,7 +286,20 @@ def manage_trailing_stops(
 
 
 # ── Entry point ─────────────────────────────────────────────
+def load_version() -> str:
+    try:
+        with open("version.txt", "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "unknown"
+
+
 def main():
+    version = load_version()
+    logger.info("═" * 56)
+    logger.info(f"  Bitget Short Bot {version}")
+    logger.info("═" * 56)
+
     dry_run = "--dry-run" in sys.argv
 
     if dry_run:
