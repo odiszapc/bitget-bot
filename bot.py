@@ -1,5 +1,5 @@
 """
-Bitget Short Bot — Main entry point.
+Bitget Short Bot — Main entry point..
 
 Automated futures trading bot that opens short positions
 with strict risk management.
