@@ -14,6 +14,7 @@ else
     git remote add origin git@github.com:odiszapc/bitget-bot.git
     git fetch origin
     git checkout -f origin/main -B main
+    git branch --set-upstream-to=origin/main main
 fi
 
 # Ensure data dirs exist
