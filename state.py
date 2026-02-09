@@ -39,6 +39,13 @@ def load_state() -> dict:
     try:
         with open(STATE_FILE, "r") as f:
             state = json.load(f)
+
+        # Ensure all required keys exist (e.g. state.json was manually created as {})
+        defaults = get_default_state()
+        for key, value in defaults.items():
+            if key not in state:
+                state[key] = value
+
         logger.info("State loaded from file")
 
         # Check if it's a new day — reset daily counters
