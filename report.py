@@ -120,11 +120,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
         outcome_class = "negative" if "fail" in outcome.lower() or "error" in outcome.lower() else "positive"
 
+        api_calls = cycle_info.get("api_calls", 0)
+        api_rps = api_calls / (cycle_minutes_js * 60) if cycle_minutes_js > 0 else 0
+        api_limit = 20
+        api_class = "negative" if api_rps > api_limit * 0.8 else "positive"
+
         cycle_section = f"""
 <div class="cycle-panel">
     <div class="cycle-header">
         <h2>Last Cycle</h2>
         <div class="cycle-time">{now}</div>
+        <div class="cycle-time">{api_calls} api calls <span class="{api_class}">({api_rps:.2f}/sec, limit {api_limit}/sec)</span></div>
     </div>
     <div class="checks">{checks_html}</div>
     <div class="outcome {outcome_class}">{_esc(outcome)}</div>

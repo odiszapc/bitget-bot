@@ -37,9 +37,22 @@ class Exchange:
         if config.get("demo", True):
             self.exchange.set_sandbox_mode(True)
 
+        self.api_call_count = 0
+
+    def _api_call(self, method: str, *args, **kwargs):
+        """Call a ccxt method and increment the API counter."""
+        self.api_call_count += 1
+        return getattr(self.exchange, method)(*args, **kwargs)
+
+    def reset_api_counter(self) -> int:
+        """Reset counter and return previous value."""
+        count = self.api_call_count
+        self.api_call_count = 0
+        return count
+
     def load_markets(self):
         """Load all available markets."""
-        self.exchange.load_markets()
+        self._api_call("load_markets")
         logger.info(f"Loaded {len(self.exchange.markets)} markets")
 
     def get_usdt_futures_symbols(self) -> list[str]:
@@ -56,13 +69,17 @@ class Exchange:
         logger.info(f"Found {len(symbols)} USDT perpetual futures pairs")
         return symbols
 
+    def get_tickers(self, symbols: list[str]) -> dict:
+        """Fetch tickers for multiple symbols."""
+        return self._api_call("fetch_tickers", symbols)
+
     def get_ohlcv(
         self, symbol: str, timeframe: str = "15m", limit: int = 100
     ) -> list:
         """Fetch OHLCV candles for a symbol."""
         try:
-            candles = self.exchange.fetch_ohlcv(
-                symbol, timeframe=timeframe, limit=limit
+            candles = self._api_call(
+                "fetch_ohlcv", symbol, timeframe=timeframe, limit=limit
             )
             return candles
         except Exception as e:
@@ -72,7 +89,7 @@ class Exchange:
     def get_ticker(self, symbol: str) -> Optional[dict]:
         """Fetch current ticker for a symbol."""
         try:
-            return self.exchange.fetch_ticker(symbol)
+            return self._api_call("fetch_ticker", symbol)
         except Exception as e:
             logger.error(f"Error fetching ticker for {symbol}: {e}")
             return None
@@ -80,7 +97,7 @@ class Exchange:
     def get_balance(self) -> float:
         """Get total USDT balance (free + used)."""
         try:
-            balance = self.exchange.fetch_balance()
+            balance = self._api_call("fetch_balance")
             total = balance.get("total", {}).get("USDT", 0)
             return float(total) if total else 0.0
         except Exception as e:
@@ -90,7 +107,7 @@ class Exchange:
     def get_open_positions(self) -> list[dict]:
         """Get all open positions."""
         try:
-            positions = self.exchange.fetch_positions()
+            positions = self._api_call("fetch_positions")
             open_positions = []
             for pos in positions:
                 contracts = float(pos.get("contracts", 0))
@@ -132,7 +149,7 @@ class Exchange:
         """
         result = {"tp": None, "sl": None}
         try:
-            orders = self.exchange.fetch_open_orders(symbol, params={
+            orders = self._api_call("fetch_open_orders", symbol, params={
                 "planType": "profit_loss",
                 "trigger": True,
             })
@@ -150,7 +167,7 @@ class Exchange:
     def set_leverage(self, symbol: str, leverage: int):
         """Set leverage for a symbol."""
         try:
-            self.exchange.set_leverage(leverage, symbol)
+            self._api_call("set_leverage", leverage, symbol)
             logger.info(f"Set leverage {leverage}x for {symbol}")
         except Exception as e:
             logger.warning(f"Could not set leverage for {symbol}: {e}")
@@ -158,7 +175,7 @@ class Exchange:
     def set_margin_mode(self, symbol: str, mode: str = "cross"):
         """Set margin mode (cross or isolated)."""
         try:
-            self.exchange.set_margin_mode(mode, symbol)
+            self._api_call("set_margin_mode", mode, symbol)
         except Exception as e:
             # Often fails if already set — that's fine
             logger.debug(f"Margin mode note for {symbol}: {e}")
@@ -201,7 +218,7 @@ class Exchange:
             )
 
             # Place the short order
-            order = self.exchange.create_order(
+            order = self._api_call("create_order",
                 symbol=symbol,
                 type="market",
                 side="sell",
@@ -239,18 +256,18 @@ class Exchange:
     def update_stop_loss(self, symbol: str, new_sl_price: float) -> bool:
         """Update stop-loss for an open position."""
         try:
-            open_orders = self.exchange.fetch_open_orders(symbol)
+            open_orders = self._api_call("fetch_open_orders", symbol)
             for order in open_orders:
                 if order.get("stopPrice") and order.get("side") == "buy":
-                    self.exchange.cancel_order(order["id"], symbol)
+                    self._api_call("cancel_order", order["id"], symbol)
                     logger.info(f"Cancelled old SL order for {symbol}")
 
             # Place new SL
-            positions = self.exchange.fetch_positions([symbol])
+            positions = self._api_call("fetch_positions", [symbol])
             for pos in positions:
                 if float(pos.get("contracts", 0)) > 0 and pos["side"] == "short":
                     amount = float(pos["contracts"])
-                    self.exchange.create_order(
+                    self._api_call("create_order",
                         symbol=symbol,
                         type="market",
                         side="buy",
@@ -274,7 +291,7 @@ class Exchange:
     def get_funding_rate(self, symbol: str) -> Optional[float]:
         """Get current funding rate for a symbol."""
         try:
-            funding = self.exchange.fetch_funding_rate(symbol)
+            funding = self._api_call("fetch_funding_rate", symbol)
             rate = funding.get("fundingRate", 0)
             return float(rate) if rate else 0.0
         except Exception as e:

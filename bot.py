@@ -68,6 +68,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     logger.info("=" * 60)
     logger.info("Starting new cycle")
 
+    exchange.reset_api_counter()
     cycle_minutes = risk.config.get("cycle_minutes", 15)
 
     # ── Step 1: Get current balance ──
@@ -139,7 +140,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # Filter by volume using tickers
     logger.info("Fetching tickers for volume filter...")
     try:
-        tickers = exchange.exchange.fetch_tickers(symbols[:100])  # Batch fetch
+        tickers = exchange.get_tickers(symbols[:100])  # Batch fetch
         liquid_symbols = filter_by_volume(tickers, min_volume)
         logger.info(
             f"Liquidity filter: {len(liquid_symbols)} pairs with >${min_volume/1e6:.0f}M volume"
@@ -147,8 +148,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     except Exception as e:
         logger.error(f"Error fetching tickers: {e}")
         logger.info(get_stats(state))
+        api_calls = exchange.api_call_count
+        rps = api_calls / (cycle_minutes * 60)
+        logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
@@ -262,8 +266,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
                     logger.error(outcome)
 
     logger.info(get_stats(state))
+    api_calls = exchange.api_call_count
+    rps = api_calls / (cycle_minutes * 60)
+    logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
     save_state(state)
-    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy}
+    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy, "api_calls": api_calls}
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
 
