@@ -216,6 +216,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .updated {{
         font-size: 12px;
         color: #484f58;
+        margin-bottom: 2px;
+    }}
+    .version {{
+        font-size: 12px;
+        color: #484f58;
         margin-bottom: 24px;
     }}
     .cards {{
@@ -374,6 +379,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 <h1>Bitget Short Bot</h1>
 <div class="updated">Last updated: {now}</div>
+<div class="version">{_esc(_load_version())}</div>
 
 <div class="cards">
     <div class="card">
@@ -436,7 +442,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 {scan_section}
 
-<div class="footer">{_esc(_load_version())} | Auto-refreshes when cycle completes</div>
+<div class="footer">Bitget Short Bot</div>
 
 <script>
 (function() {{

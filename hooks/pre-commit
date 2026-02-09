@@ -1,0 +1,13 @@
+#!/bin/bash
+# Pre-commit hook: auto-generate version.txt with build timestamp
+
+# Get UTC offset in hours
+utc_offset=$(date +%z)               # e.g. +0700
+sign=${utc_offset:0:1}               # + or -
+hours=${utc_offset:1:2}              # e.g. 07
+hours_stripped=$((10#$hours))         # remove leading zero: 7
+
+version="$(date +'%Y-%m-%d %H:%M:%S') GMT${sign}${hours_stripped}"
+
+echo "$version" > version.txt
+git add version.txt
