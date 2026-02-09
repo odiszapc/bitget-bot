@@ -177,8 +177,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     cls = "neutral"
                 else:
                     cls = "muted"
-                active_cls = " strategy-active" if name == act_strat else ""
-                return f'<td class="{cls}{active_cls}">{cnt}/{mx} <small>{_esc(sigs)}</small></td>'
+                return f'<td class="{cls}">{cnt}/{mx} <small>{_esc(sigs)}</small></td>'
 
             classic_cell = _strat_cell("classic")
             volume_cell = _strat_cell("volume")
@@ -202,8 +201,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
-            <th>Classic</th>
-            <th>Volume</th>
+            <th{"" if act_strat != "classic" else ' class="strategy-active"'}>Classic</th>
+            <th{"" if act_strat != "volume" else ' class="strategy-active"'}>Volume</th>
         </tr>
     </thead>
     <tbody>
@@ -281,8 +280,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .scan-dim td {{
         color: #484f58;
     }}
-    .strategy-active {{
-        border-bottom: 2px solid #58a6ff;
+    th.strategy-active {{
+        color: #58a6ff;
     }}
     .scan-dim td.symbol {{
         color: #484f58;
