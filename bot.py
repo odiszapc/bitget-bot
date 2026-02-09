@@ -76,13 +76,15 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         logger.warning("Balance fetch failed or zero, reloading markets and retrying...")
         exchange.load_markets()
         current_balance = exchange.get_balance()
-    if current_balance <= 0:
-        logger.error("Balance is zero, skipping cycle")
-        return
 
-    if state["start_balance"] <= 0:
-        state["start_balance"] = current_balance
-        logger.info(f"Set start balance: {current_balance:.2f} USDT")
+    balance_ok = current_balance > 0
+
+    if not balance_ok:
+        logger.warning("Balance is zero — will scan market but skip trading")
+    else:
+        if state["start_balance"] <= 0:
+            state["start_balance"] = current_balance
+            logger.info(f"Set start balance: {current_balance:.2f} USDT")
 
     logger.info(f"Current balance: {current_balance:.2f} USDT")
 
@@ -109,6 +111,10 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     for reason in reasons:
         logger.info(f"  {reason}")
+
+    if not balance_ok:
+        all_safe = False
+        reasons.append("❌ Balance is zero — trading disabled")
 
     if not all_safe:
         logger.info("Safety check failed, skipping trade execution")
