@@ -96,6 +96,92 @@ def calculate_macd_cross(df: pd.DataFrame) -> bool:
     return cross_now or cross_prev
 
 
+def calculate_volume_spike(df: pd.DataFrame, lookback: int = 20, multiplier: float = 1.5) -> bool:
+    """Check if current volume is significantly above recent average."""
+    if len(df) < lookback + 1:
+        return False
+    avg_volume = df["volume"].iloc[-(lookback + 1):-1].mean()
+    current_volume = df["volume"].iloc[-1]
+    if avg_volume <= 0:
+        return False
+    return current_volume > multiplier * avg_volume
+
+
+# ── Strategy functions ──────────────────────────────────────
+
+def analyze_classic(
+    df: pd.DataFrame, funding_rate: float | None, config: dict
+) -> dict:
+    """Classic strategy: RSI>70, EMA_CROSS, MACD_CROSS, FUNDING (3 of 4)."""
+    result = {"signals": [], "signal_count": 0, "max_signals": 4,
+              "rsi": 0.0, "atr_pct": 0.0, "details": []}
+
+    rsi = calculate_rsi(df)
+    result["rsi"] = rsi
+    if rsi > 70:
+        result["signals"].append("RSI")
+        result["details"].append(f"RSI={rsi:.1f} (>70)")
+
+    if calculate_ema_cross(df):
+        result["signals"].append("EMA_CROSS")
+        result["details"].append("EMA(9)<EMA(21)")
+
+    if calculate_macd_cross(df):
+        result["signals"].append("MACD_CROSS")
+        result["details"].append("MACD bearish cross")
+
+    if funding_rate is not None and funding_rate > 0.0001:
+        result["signals"].append("FUNDING")
+        result["details"].append(f"FR={funding_rate*100:.4f}%")
+
+    result["atr_pct"] = calculate_atr(df)
+    result["signal_count"] = len(result["signals"])
+    return result
+
+
+def analyze_volume(
+    df: pd.DataFrame, funding_rate: float | None, config: dict
+) -> dict:
+    """Volume strategy: RSI>65, EMA_CROSS, VOL_SPIKE, FUNDING (3 of 4)."""
+    result = {"signals": [], "signal_count": 0, "max_signals": 4,
+              "rsi": 0.0, "atr_pct": 0.0, "details": []}
+
+    rsi = calculate_rsi(df)
+    result["rsi"] = rsi
+    if rsi > 65:
+        result["signals"].append("RSI")
+        result["details"].append(f"RSI={rsi:.1f} (>65)")
+
+    if calculate_ema_cross(df):
+        result["signals"].append("EMA_CROSS")
+        result["details"].append("EMA(9)<EMA(21)")
+
+    if calculate_volume_spike(df):
+        result["signals"].append("VOL_SPIKE")
+        result["details"].append("Volume >1.5x avg")
+
+    if funding_rate is not None and funding_rate > 0.0001:
+        result["signals"].append("FUNDING")
+        result["details"].append(f"FR={funding_rate*100:.4f}%")
+
+    result["atr_pct"] = calculate_atr(df)
+    result["signal_count"] = len(result["signals"])
+    return result
+
+
+STRATEGIES = {
+    "classic": analyze_classic,
+    "volume": analyze_volume,
+}
+
+
+def analyze_all_strategies(
+    df: pd.DataFrame, funding_rate: float | None, config: dict
+) -> dict[str, dict]:
+    """Run all strategies on a symbol. Returns {name: result_dict}."""
+    return {name: fn(df, funding_rate, config) for name, fn in STRATEGIES.items()}
+
+
 def analyze_symbol(
     df: pd.DataFrame, funding_rate: Optional[float], config: dict
 ) -> dict:

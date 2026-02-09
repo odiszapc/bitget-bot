@@ -140,6 +140,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     if cycle_info and cycle_info.get("scan_results"):
         sr_list = cycle_info["scan_results"]
         min_signals = 3
+        act_strat = cycle_info.get("active_strategy", "volume")
 
         scan_rows = ""
         for sr in sr_list:
@@ -158,10 +159,29 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 row_class = "scan-dim"
 
             base, quote = _format_symbol(sr["symbol"])
-            signals_str = ", ".join(sr["signals"]) if sr["signals"] else "-"
             fr = sr.get("funding_rate", 0)
 
             rsi_class = "positive" if sr["rsi"] > 70 else ("warning" if sr["rsi"] > 60 else "")
+
+            # Build strategy columns
+            def _strat_cell(name):
+                s = sr.get(name, {})
+                cnt = s.get("signal_count", 0)
+                mx = s.get("max_signals", 4)
+                sigs = ", ".join(s.get("signals", []))
+                if cnt >= 3:
+                    cls = "positive"
+                elif cnt == 2:
+                    cls = "warning"
+                elif cnt == 1:
+                    cls = "neutral"
+                else:
+                    cls = "muted"
+                active_cls = " strategy-active" if name == act_strat else ""
+                return f'<td class="{cls}{active_cls}">{cnt}/{mx} <small>{_esc(sigs)}</small></td>'
+
+            classic_cell = _strat_cell("classic")
+            volume_cell = _strat_cell("volume")
 
             scan_rows += f"""
             <tr class="{row_class}">
@@ -169,12 +189,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
-                <td class="{count_class}">{sc}/4</td>
-                <td>{_esc(signals_str)}</td>
+                {classic_cell}
+                {volume_cell}
             </tr>"""
 
         scan_section = f"""
-<h2>Market Scan ({len(sr_list)} pairs)</h2>
+<h2>Market Scan ({len(sr_list)} pairs) &mdash; Strategy: {_esc(act_strat)}</h2>
 <table>
     <thead>
         <tr>
@@ -182,8 +202,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
-            <th>Signals</th>
-            <th>Details</th>
+            <th>Classic</th>
+            <th>Volume</th>
         </tr>
     </thead>
     <tbody>
@@ -260,6 +280,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .scan-dim td {{
         color: #484f58;
+    }}
+    .strategy-active {{
+        border-bottom: 2px solid #58a6ff;
     }}
     .scan-dim td.symbol {{
         color: #484f58;

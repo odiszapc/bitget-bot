@@ -20,7 +20,8 @@ from exchange import Exchange
 from strategy import (
     candles_to_dataframe,
     calculate_atr,
-    analyze_symbol,
+    analyze_all_strategies,
+    STRATEGIES,
     calculate_sl_tp,
     filter_by_volume,
 )
@@ -126,6 +127,12 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     max_atr = config.get("max_atr_pct", 15.0)
     min_signals = config.get("min_signals", 3)
 
+    active_strategy = config.get("signal_strategy", "volume")
+    if active_strategy not in STRATEGIES:
+        logger.warning(f"Unknown signal_strategy '{active_strategy}', falling back to 'volume'")
+        active_strategy = "volume"
+    logger.info(f"Active strategy: {active_strategy}")
+
     scan_results = []
     symbols = exchange.get_usdt_futures_symbols()
 
@@ -141,7 +148,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         logger.error(f"Error fetching tickers: {e}")
         logger.info(get_stats(state))
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": []}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
@@ -160,16 +167,18 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             continue
 
         funding_rate = exchange.get_funding_rate(symbol)
-        analysis = analyze_symbol(df, funding_rate, config)
+        all_analysis = analyze_all_strategies(df, funding_rate, config)
+        active = all_analysis[active_strategy]
 
         scan_results.append({
             "symbol": symbol,
-            "rsi": analysis["rsi"],
+            "rsi": active["rsi"],
             "atr_pct": atr_pct,
             "funding_rate": funding_rate or 0,
-            "signal_count": analysis["signal_count"],
-            "signals": analysis["signals"],
-            "details": analysis["details"],
+            "signal_count": active["signal_count"],
+            "signals": active["signals"],
+            "details": active["details"],
+            **{name: result for name, result in all_analysis.items()},
         })
 
         time.sleep(0.1)
@@ -178,12 +187,19 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
     scan_results = scan_results[:20]  # Top 20
 
-    logger.info(f"Market scan: {len(scan_results)} pairs with signals")
+    logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
     for sr in scan_results:
+        parts = []
+        for name in STRATEGIES:
+            s = sr.get(name, {})
+            cnt = s.get("signal_count", 0)
+            mx = s.get("max_signals", 4)
+            sigs = ",".join(s.get("signals", []))
+            marker = "*" if name == active_strategy else " "
+            parts.append(f"{marker}{name}={cnt}/{mx}[{sigs}]")
         logger.info(
             f"  {'🎯' if sr['signal_count'] >= min_signals else '  '} "
-            f"{sr['symbol']}: {sr['signal_count']}/4 signals "
-            f"[{', '.join(sr['signals'])}] "
+            f"{sr['symbol']}: {' '.join(parts)} "
             f"RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
             f"FR={sr['funding_rate']*100:.4f}%"
         )
@@ -247,7 +263,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     logger.info(get_stats(state))
     save_state(state)
-    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results}
+    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy}
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
 
