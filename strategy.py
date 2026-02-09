@@ -250,7 +250,7 @@ def calculate_sl_tp(
     min_tp_pct = config.get("min_tp_pct", 5.0)
 
     sl_pct = max(min_stop_pct, 1.5 * atr_pct)
-    tp_pct = max(min_tp_pct, 2.5 * atr_pct)
+    tp_pct = max(min_tp_pct, 0.1 * atr_pct)
 
     # Short position: SL above, TP below
     stop_loss_price = entry_price * (1 + sl_pct / 100)
