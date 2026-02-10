@@ -241,7 +241,7 @@ class Exchange:
                 side="sell",
                 amount=amount,
                 params={
-                    "holdSide": "sell",
+                    "hedged": False,
                     "stopLoss": {
                         "triggerPrice": stop_loss_price,
                         "type": "market",
@@ -300,7 +300,7 @@ class Exchange:
                 amount = float(amount)
 
             order_params = {
-                "tradeSide": "sell_single",
+                "hedged": False,
                 "takeProfit": {
                     "triggerPrice": take_profit_price,
                     "type": "market",
