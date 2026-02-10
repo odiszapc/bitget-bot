@@ -99,6 +99,9 @@ class Exchange:
         try:
             balance = self._api_call("fetch_balance")
             total = balance.get("total", {}).get("USDT", 0)
+            free = balance.get("free", {}).get("USDT", 0)
+            used = balance.get("used", {}).get("USDT", 0)
+            logger.debug(f"Balance raw: total={total}, free={free}, used={used}")
             return float(total) if total else 0.0
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
