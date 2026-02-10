@@ -35,6 +35,7 @@ from state import (
     get_stats,
 )
 from report import generate_report
+from charts import generate_charts_for_symbols
 
 # ── Logging setup ───────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
@@ -152,7 +153,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         rps = api_calls / (cycle_minutes * 60)
         logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": {}}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
@@ -207,6 +208,13 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             f"RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
             f"FR={sr['funding_rate']*100:.4f}%"
         )
+
+    # ── Step 7b: Generate charts for top pairs ──
+    try:
+        chart_map = generate_charts_for_symbols(exchange, scan_results)
+    except Exception as e:
+        logger.error(f"Error generating charts: {e}")
+        chart_map = {}
 
     # ── Step 8: Execute trade (only if safe) ──
     candidates = [s for s in scan_results if s["signal_count"] >= min_signals]
@@ -270,7 +278,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     rps = api_calls / (cycle_minutes * 60)
     logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
     save_state(state)
-    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy, "api_calls": api_calls, "config": config}
+    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": chart_map}
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
 

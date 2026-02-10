@@ -149,17 +149,20 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
     # Build market scan section
     scan_section = ""
+    modal_html = ""
     if cycle_info and cycle_info.get("scan_results"):
         sr_list = cycle_info["scan_results"]
         min_signals = 3
         act_strat = cycle_info.get("active_strategy", "volume")
+        chart_map = cycle_info.get("chart_map", {})
 
         scan_rows = ""
-        for sr in sr_list:
+        modals = ""
+        for idx, sr in enumerate(sr_list):
             sc = sr["signal_count"]
             if sc >= 3:
                 count_class = "positive"
-                row_class = "best-candidate" if sr is sr_list[0] else "scan-hot"
+                row_class = "best-candidate" if idx == 0 else "scan-hot"
             elif sc == 2:
                 count_class = "warning"
                 row_class = ""
@@ -194,8 +197,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             classic_cell = _strat_cell("classic")
             volume_cell = _strat_cell("volume")
 
+            modal_id = f"modal-{idx}"
             scan_rows += f"""
-            <tr class="{row_class}">
+            <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
@@ -203,6 +207,46 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 {classic_cell}
                 {volume_cell}
             </tr>"""
+
+            # Build modal for this symbol
+            charts = chart_map.get(sr["symbol"], {})
+            chart_imgs = ""
+            for tf_label, tf_key in [("1 min", "1m"), ("15 min", "15m"), ("1 hour", "1h")]:
+                src = charts.get(tf_key, "")
+                if src:
+                    chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}" alt="{_esc(base)} {tf_label}"></div>\n'
+
+            # Strategy details for modal
+            classic_data = sr.get("classic", {})
+            volume_data = sr.get("volume", {})
+            c_sigs = ", ".join(classic_data.get("signals", [])) or "-"
+            v_sigs = ", ".join(volume_data.get("signals", [])) or "-"
+
+            modals += f"""
+<div class="modal-overlay" id="{modal_id}" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></span>
+            <span class="modal-close" onclick="this.closest('.modal-overlay').style.display='none'">&times;</span>
+        </div>
+        <div class="modal-stats">
+            <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
+            <div class="modal-stat"><span class="label">ATR</span><span>{sr['atr_pct']:.1f}%</span></div>
+            <div class="modal-stat"><span class="label">Funding</span><span>{fr*100:.4f}%</span></div>
+            <div class="modal-stat"><span class="label">Classic</span><span>{classic_data.get('signal_count',0)}/{classic_data.get('max_signals',4)}</span></div>
+            <div class="modal-stat"><span class="label">Volume</span><span>{volume_data.get('signal_count',0)}/{volume_data.get('max_signals',4)}</span></div>
+        </div>
+        <div class="modal-signals">
+            <div><small>Classic:</small> {_esc(c_sigs)}</div>
+            <div><small>Volume:</small> {_esc(v_sigs)}</div>
+        </div>
+        <div class="modal-charts">
+            {chart_imgs if chart_imgs else '<div class="empty">No charts available</div>'}
+        </div>
+    </div>
+</div>"""
+
+        modal_html = modals
 
         scan_section = f"""
 <h2>Market Scan ({len(sr_list)} pairs) &mdash; Strategy: {_esc(act_strat)}</h2>
@@ -405,11 +449,101 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         font-weight: 700;
         color: #58a6ff;
     }}
+    .scan-row {{
+        cursor: pointer;
+    }}
+    .scan-row:hover {{
+        background: #1c2128 !important;
+    }}
     .footer {{
         margin-top: 32px;
         font-size: 11px;
         color: #30363d;
         text-align: center;
+    }}
+    .modal-overlay {{
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+    }}
+    .modal-content {{
+        background: #161b22;
+        border: 1px solid #21262d;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 720px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }}
+    .modal-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }}
+    .modal-symbol {{
+        font-size: 20px;
+        font-weight: 700;
+        color: #58a6ff;
+    }}
+    .modal-close {{
+        font-size: 28px;
+        color: #484f58;
+        cursor: pointer;
+        line-height: 1;
+    }}
+    .modal-close:hover {{
+        color: #c9d1d9;
+    }}
+    .modal-stats {{
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }}
+    .modal-stat {{
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }}
+    .modal-stat .label {{
+        font-size: 10px;
+        color: #484f58;
+        text-transform: uppercase;
+    }}
+    .modal-stat span:last-child {{
+        font-size: 15px;
+        font-weight: 600;
+    }}
+    .modal-signals {{
+        font-size: 12px;
+        color: #8b949e;
+        margin-bottom: 16px;
+        line-height: 1.6;
+    }}
+    .modal-signals small {{
+        color: #484f58;
+    }}
+    .modal-charts {{
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }}
+    .modal-chart img {{
+        width: 100%;
+        border-radius: 6px;
+        border: 1px solid #21262d;
+    }}
+    .modal-chart-label {{
+        font-size: 11px;
+        color: #484f58;
+        text-transform: uppercase;
+        margin-bottom: 4px;
     }}
 </style>
 </head>
@@ -490,6 +624,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 <div class="footer">Bitget Short Bot</div>
 
+{modal_html}
+
 <script>
 (function() {{
     var cycleMinutes = {cycle_minutes_js};
@@ -517,6 +653,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     tick();
     setInterval(tick, 1000);
 }})();
+document.addEventListener("keydown", function(e) {{
+    if (e.key === "Escape") {{
+        var modals = document.querySelectorAll(".modal-overlay");
+        modals.forEach(function(m) {{ m.style.display = "none"; }});
+    }}
+}});
 </script>
 
 </body>
