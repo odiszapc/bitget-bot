@@ -204,7 +204,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             parts.append(f"{marker}{name}={cnt}/{mx}[{sigs}]")
         logger.info(
             f"  {'🎯' if sr['signal_count'] >= min_signals else '  '} "
-            f"{sr['symbol']}: {' '.join(parts)} "
+            f"{sr['symbol'].split(':')[0]}: {' '.join(parts)} "
             f"RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
             f"FR={sr['funding_rate']*100:.4f}%"
         )
