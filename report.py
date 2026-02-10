@@ -82,22 +82,26 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             current_price = ep.get("mark_price", 0) or entry_price
             leverage = ep.get("leverage", 0)
             liq_price = ep.get("liquidation_price", 0)
+            pp = ep.get("price_precision", 2)
             total_unrealized += unrealized_pnl
 
             pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
 
             base, quote = _format_symbol(symbol)
 
+            def _fmt_price(v):
+                return f"{v:.{pp}f}" if v else "-"
+
             position_rows += f"""
             <tr>
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
-                <td>{entry_price}</td>
-                <td>{current_price}</td>
+                <td>{_fmt_price(entry_price)}</td>
+                <td>{_fmt_price(current_price)}</td>
                 <td>{leverage}x</td>
                 <td>{margin:.2f}</td>
-                <td>{sl if sl else '-'}</td>
-                <td>{tp if tp else '-'}</td>
-                <td class="liq-price">{liq_price if liq_price else '-'}</td>
+                <td>{_fmt_price(sl)}</td>
+                <td>{_fmt_price(tp)}</td>
+                <td class="liq-price">{_fmt_price(liq_price)}</td>
                 <td class="{pnl_class}">{unrealized_pnl:+.4f}</td>
                 <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
                 <td>{opened_str}</td>

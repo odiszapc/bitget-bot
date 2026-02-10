@@ -142,6 +142,7 @@ class Exchange:
                             "take_profit": float(tp_raw) if tp_raw else 0,
                             "stop_loss": float(sl_raw) if sl_raw else 0,
                             "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
+                            "price_precision": int(self.exchange.markets.get(pos["symbol"], {}).get("precision", {}).get("price", 2)),
                         }
                     )
             return open_positions
