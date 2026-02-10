@@ -103,7 +103,7 @@ bitget-short-bot/
 - `min_tp_pct` — default 5.0
 - `daily_loss_limit_pct` — default 5.0
 - `btc_bull_limit_pct` — default 5.0
-- `cycle_minutes` — default 15
+- `cycle_minutes` — default 5
 - `demo` — default true (use Bitget demo/testnet)
 
 ## Key Commands
@@ -116,3 +116,4 @@ bitget-short-bot/
 - The bot is designed to be restarted safely at any time
 - All API calls include error handling and retry logic
 - Rate limiting: respect Bitget's 20 requests/second limit
+- every time you finish task commit and push automatically
