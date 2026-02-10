@@ -120,7 +120,6 @@ class RiskManager:
         all_passed = True
 
         checks = [
-            self.check_daily_loss(start_balance, current_balance),
             self.check_btc_trend(btc_24h_change),
             self.check_news_blackout(),
             self.check_position_count(open_positions),
