@@ -97,7 +97,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{margin:.2f}</td>
                 <td>{sl if sl else '-'}</td>
                 <td>{tp if tp else '-'}</td>
-                <td>{liq_price if liq_price else '-'}</td>
+                <td class="liq-price">{liq_price if liq_price else '-'}</td>
                 <td class="{pnl_class}">{unrealized_pnl:+.4f}</td>
                 <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
                 <td>{opened_str}</td>
@@ -340,6 +340,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .positive {{ color: #3fb950; }}
     .negative {{ color: #f85149; }}
     .warning {{ color: #d29922; }}
+    .liq-price {{ color: #e8a735; }}
     .neutral {{ color: #c9d1d9; }}
     .muted {{ color: #30363d; }}
     .best-candidate {{
