@@ -229,6 +229,10 @@ class Exchange:
                 amount = self.exchange.amount_to_precision(symbol, amount)
                 amount = float(amount)
 
+            # Round SL/TP to exchange price precision
+            stop_loss_price = float(self.exchange.price_to_precision(symbol, stop_loss_price))
+            take_profit_price = float(self.exchange.price_to_precision(symbol, take_profit_price))
+
             logger.info(
                 f"Opening SHORT {symbol}: amount={amount}, "
                 f"price={current_price}, SL={stop_loss_price}, TP={take_profit_price}"
@@ -292,6 +296,9 @@ class Exchange:
             if market:
                 amount = self.exchange.amount_to_precision(symbol, amount)
                 amount = float(amount)
+
+            # Round TP to exchange price precision
+            take_profit_price = float(self.exchange.price_to_precision(symbol, take_profit_price))
 
             logger.info(
                 f"Opening SHORT (manual) {symbol}: amount={amount}, "
