@@ -75,7 +75,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     pass
 
             opened_ts = pos.get("opened_at", 0)
-            opened_str = datetime.fromtimestamp(opened_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M") if opened_ts else "-"
+            if opened_ts:
+                opened_dt = datetime.fromtimestamp(opened_ts, tz=timezone.utc)
+                ago_sec = (now_dt - opened_dt).total_seconds()
+                if ago_sec < 3600:
+                    ago_str = f"{int(ago_sec // 60)} min ago"
+                elif ago_sec < 86400:
+                    ago_str = f"{int(ago_sec // 3600)} h ago"
+                else:
+                    ago_str = f"{int(ago_sec // 86400)} d ago"
+                opened_str = f"{opened_dt.strftime('%Y-%m-%d %H:%M')} ({ago_str})"
+            else:
+                opened_str = "-"
 
             unrealized_pnl = ep.get("unrealized_pnl", 0)
             pnl_pct = ep.get("percentage", 0)
