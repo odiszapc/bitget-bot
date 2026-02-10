@@ -258,6 +258,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
         scan_section = f"""
 <h2>Market Scan ({len(sr_list)} pairs) &mdash; Strategy: {_esc(act_strat)}</h2>
+<div class="table-wrap">
 <table>
     <thead>
         <tr>
@@ -273,6 +274,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         {scan_rows}
     </tbody>
 </table>
+</div>
 <div style="height:28px"></div>
 """
 
@@ -361,6 +363,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }}
+    .table-wrap {{
+        overflow-x: auto;
+    }}
     table {{
         width: 100%;
         border-collapse: collapse;
@@ -383,6 +388,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         padding: 10px 12px;
         font-size: 13px;
         border-top: 1px solid #21262d;
+        white-space: nowrap;
     }}
     td.symbol {{
         color: #58a6ff;
@@ -665,17 +671,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 
 <h2>Open Positions ({len(positions)})</h2>
+<div class="table-wrap">
 <table>
     <thead>
         <tr>
             <th>Symbol</th>
             <th>Entry</th>
             <th>Current</th>
-            <th>Leverage</th>
+            <th>Lev</th>
             <th>Margin</th>
-            <th>Stop Loss</th>
-            <th>Take Profit</th>
-            <th>PnL (USDT)</th>
+            <th>SL</th>
+            <th>TP</th>
+            <th>PnL</th>
             <th>PnL %</th>
             <th>Opened</th>
         </tr>
@@ -684,6 +691,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         {position_rows}
     </tbody>
 </table>
+</div>
 <div style="height:28px"></div>
 
 {cycle_section}
