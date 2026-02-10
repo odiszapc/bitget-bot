@@ -211,10 +211,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             # Build modal for this symbol
             charts = chart_map.get(sr["symbol"], {})
             chart_imgs = ""
+            cache_bust = int(now_dt.timestamp())
             for tf_label, tf_key in [("1 min", "1m"), ("15 min", "15m"), ("1 hour", "1h")]:
                 src = charts.get(tf_key, "")
                 if src:
-                    chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}" alt="{_esc(base)} {tf_label}"></div>\n'
+                    chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}?t={cache_bust}" alt="{_esc(base)} {tf_label}"></div>\n'
 
             # Strategy details for modal
             classic_data = sr.get("classic", {})

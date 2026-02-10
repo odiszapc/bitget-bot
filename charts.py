@@ -10,8 +10,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-import matplotlib.colors as mcolors
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +21,6 @@ CANDLE_LIMIT = 150
 # Style constants
 BG_COLOR = "#0d1117"
 LINE_COLOR = "#00d4ff"
-FILL_TOP = (0, 0.83, 1, 0.35)   # cyan, 35% opacity
-FILL_BOTTOM = (0, 0.83, 1, 0.0)  # cyan, transparent
 GRID_COLOR = "#1a1e2e"
 GLOW_COLOR = "#00d4ff"
 
@@ -42,9 +38,14 @@ def clear_candles_dir():
     os.makedirs(CANDLES_DIR, exist_ok=True)
 
 
-def generate_chart(closes: list[float], symbol: str, timeframe: str) -> str | None:
+OVERLAP_COLOR = "#f0883e"
+
+
+def generate_chart(closes: list[float], symbol: str, timeframe: str, overlap_candles: int = 0) -> str | None:
     """
     Generate a single chart PNG.
+    overlap_candles: if > 0, draw a vertical marker line showing where the
+    finer-resolution chart starts (counted from the right edge).
     Returns the filename relative to output/ or None on error.
     """
     if not closes or len(closes) < 2:
@@ -61,13 +62,6 @@ def generate_chart(closes: list[float], symbol: str, timeframe: str) -> str | No
         # Draw line
         ax.plot(x, y, color=LINE_COLOR, linewidth=1.2, zorder=3)
 
-        # Gradient fill under line
-        ax.fill_between(
-            x, y, y.min(),
-            color=FILL_TOP[:3],
-            alpha=0.0,  # Will be overridden by gradient
-            zorder=2,
-        )
         # Create gradient effect with multiple fills
         n_layers = 20
         for i in range(n_layers):
@@ -83,6 +77,11 @@ def generate_chart(closes: list[float], symbol: str, timeframe: str) -> str | No
         # Grid - subtle vertical lines
         for gx in np.linspace(0, len(closes) - 1, 5)[1:-1]:
             ax.axvline(x=gx, color=GRID_COLOR, linewidth=0.5, zorder=1)
+
+        # Overlap marker — where the finer chart begins
+        if 0 < overlap_candles < len(closes):
+            marker_x = len(closes) - overlap_candles
+            ax.axvline(x=marker_x, color=OVERLAP_COLOR, linewidth=1, linestyle="--", zorder=6, alpha=0.7)
 
         # Remove all axes, labels, borders
         ax.set_xlim(0, len(closes) - 1)
@@ -104,6 +103,26 @@ def generate_chart(closes: list[float], symbol: str, timeframe: str) -> str | No
         return None
 
 
+# How many candles of the finer timeframe fit into CANDLE_LIMIT of the coarser one
+# 15m chart: 150 × 1min candles = 150min → 150/15 = 10 candles on the 15m chart
+# 1h chart: 150 × 15min candles = 2250min → 2250/60 = 37.5 candles on the 1h chart
+OVERLAP = {
+    "1m": 0,
+    "15m": CANDLE_LIMIT,          # 150 1m candles = 10 15m candles (150/15)
+    "1h": CANDLE_LIMIT * 15 // 60,  # 150 15m candles = 37 1h candles (150*15/60)
+}
+
+
+def _overlap_candles(timeframe: str) -> int:
+    """Return how many candles from the right the finer chart covers."""
+    minutes_per = {"1m": 1, "15m": 15, "1h": 60}
+    mp = minutes_per.get(timeframe, 0)
+    overlap_minutes = OVERLAP.get(timeframe, 0)
+    if mp == 0 or overlap_minutes == 0:
+        return 0
+    return overlap_minutes // mp
+
+
 def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
     """
     Generate charts for top scan results.
@@ -121,7 +140,8 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
             if not candles or len(candles) < 2:
                 continue
             closes = [c[4] for c in candles]  # close price is index 4
-            filename = generate_chart(closes, symbol, tf)
+            overlap = _overlap_candles(tf)
+            filename = generate_chart(closes, symbol, tf, overlap_candles=overlap)
             if filename:
                 chart_map[symbol][tf] = filename
 
