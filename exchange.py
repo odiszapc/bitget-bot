@@ -299,28 +299,39 @@ class Exchange:
                 amount = self.exchange.amount_to_precision(symbol, amount)
                 amount = float(amount)
 
-            order_params = {
-                "hedged": False,
-                "takeProfit": {
-                    "triggerPrice": take_profit_price,
-                    "type": "market",
-                },
-            }
-
             logger.info(
                 f"Opening SHORT (manual) {symbol}: amount={amount}, "
-                f"price={current_price}, TP={take_profit_price}, no SL, params={order_params}"
+                f"price={current_price}, TP={take_profit_price}, no SL"
             )
 
+            # Step 1: Open position (one-way mode)
             order = self._api_call("create_order",
                 symbol=symbol,
                 type="market",
                 side="sell",
                 amount=amount,
-                params=order_params,
+                params={"hedged": False},
             )
 
-            logger.info(f"Manual order placed: {order['id']}")
+            logger.info(f"Manual order placed: {order['id']}, setting TP...")
+
+            # Step 2: Set TP as a separate trigger order
+            try:
+                self._api_call("create_order",
+                    symbol=symbol,
+                    type="market",
+                    side="buy",
+                    amount=amount,
+                    params={
+                        "hedged": False,
+                        "stopLossPrice": None,
+                        "takeProfitPrice": take_profit_price,
+                        "triggerType": "mark_price",
+                    },
+                )
+                logger.info(f"TP set at {take_profit_price} for {symbol}")
+            except Exception as tp_err:
+                logger.warning(f"Could not set TP for {symbol}: {tp_err}")
 
             return {
                 "order_id": order["id"],
