@@ -593,6 +593,20 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         border-radius: 4px;
         border: 1px solid #21262d;
     }}
+    .spinner {{
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #3fb950;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-left: 8px;
+    }}
+    @keyframes spin {{
+        to {{ transform: rotate(360deg); }}
+    }}
     .preview-empty {{
         font-size: 12px;
         color: #484f58;
@@ -696,7 +710,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     function tick() {{
         var diff = Math.floor((nextCycle - Date.now()) / 1000);
         if (diff <= 0) {{
-            el.textContent = "waiting for update...";
+            el.innerHTML = 'waiting for update...<span class="spinner"></span>';
             el.style.color = "#3fb950";
             if (!refreshTimer) {{
                 refreshTimer = setInterval(function() {{
