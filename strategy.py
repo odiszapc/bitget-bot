@@ -142,7 +142,7 @@ def analyze_classic(
 def analyze_volume(
     df: pd.DataFrame, funding_rate: float | None, config: dict
 ) -> dict:
-    """Volume strategy: RSI>65, EMA_CROSS, VOL_SPIKE, FUNDING (3 of 4)."""
+    """Volume strategy: EMA_CROSS alone is enough, OR 3 of 4 signals."""
     result = {"signals": [], "signal_count": 0, "max_signals": 4,
               "rsi": 0.0, "atr_pct": 0.0, "details": []}
 
@@ -152,7 +152,8 @@ def analyze_volume(
         result["signals"].append("RSI")
         result["details"].append(f"RSI={rsi:.1f} (>65)")
 
-    if calculate_ema_cross(df):
+    has_ema_cross = calculate_ema_cross(df)
+    if has_ema_cross:
         result["signals"].append("EMA_CROSS")
         result["details"].append("EMA(9)<EMA(21)")
 
@@ -165,7 +166,12 @@ def analyze_volume(
         result["details"].append(f"FR={funding_rate*100:.4f}%")
 
     result["atr_pct"] = calculate_atr(df)
-    result["signal_count"] = len(result["signals"])
+    actual_count = len(result["signals"])
+    # EMA_CROSS alone is a sufficient signal — treat as 3/4
+    if has_ema_cross and actual_count < 3:
+        result["signal_count"] = 3
+    else:
+        result["signal_count"] = actual_count
     return result
 
 
