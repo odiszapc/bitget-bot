@@ -103,24 +103,14 @@ def generate_chart(closes: list[float], symbol: str, timeframe: str, overlap_can
         return None
 
 
-# How many candles of the finer timeframe fit into CANDLE_LIMIT of the coarser one
-# 15m chart: 150 × 1min candles = 150min → 150/15 = 10 candles on the 15m chart
-# 1h chart: 150 × 15min candles = 2250min → 2250/60 = 37.5 candles on the 1h chart
-OVERLAP = {
+# How many candles from the right the finer chart covers on this chart:
+# 15m chart: 150 1m-candles = 150 min → 150/15 = 10 candles
+# 1h chart: 150 15m-candles = 2250 min → 2250/60 = 37 candles
+OVERLAP_CANDLES = {
     "1m": 0,
-    "15m": CANDLE_LIMIT,          # 150 1m candles = 10 15m candles (150/15)
-    "1h": CANDLE_LIMIT * 15 // 60,  # 150 15m candles = 37 1h candles (150*15/60)
+    "15m": CANDLE_LIMIT // 15,          # 150 / 15 = 10
+    "1h": CANDLE_LIMIT * 15 // 60,      # 150 * 15 / 60 = 37
 }
-
-
-def _overlap_candles(timeframe: str) -> int:
-    """Return how many candles from the right the finer chart covers."""
-    minutes_per = {"1m": 1, "15m": 15, "1h": 60}
-    mp = minutes_per.get(timeframe, 0)
-    overlap_minutes = OVERLAP.get(timeframe, 0)
-    if mp == 0 or overlap_minutes == 0:
-        return 0
-    return overlap_minutes // mp
 
 
 def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
@@ -140,7 +130,7 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
             if not candles or len(candles) < 2:
                 continue
             closes = [c[4] for c in candles]  # close price is index 4
-            overlap = _overlap_candles(tf)
+            overlap = OVERLAP_CANDLES.get(tf, 0)
             filename = generate_chart(closes, symbol, tf, overlap_candles=overlap)
             if filename:
                 chart_map[symbol][tf] = filename
