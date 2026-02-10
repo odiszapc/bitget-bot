@@ -241,6 +241,7 @@ class Exchange:
                 side="sell",
                 amount=amount,
                 params={
+                    "holdSide": "sell",
                     "stopLoss": {
                         "triggerPrice": stop_loss_price,
                         "type": "market",
@@ -309,6 +310,7 @@ class Exchange:
                 side="sell",
                 amount=amount,
                 params={
+                    "holdSide": "sell",
                     "takeProfit": {
                         "triggerPrice": take_profit_price,
                         "type": "market",
