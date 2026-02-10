@@ -119,6 +119,7 @@ class Exchange:
             for pos in positions:
                 contracts = float(pos.get("contracts", 0))
                 if contracts > 0:
+                    logger.info(f"Position raw: symbol={pos.get('symbol')} entry={pos.get('entryPrice')} mark={pos.get('markPrice')} liq={pos.get('liquidationPrice')} pnl={pos.get('unrealizedPnl')} pct={pos.get('percentage')}")
                     info = pos.get("info", {})
                     tp_raw = info.get("takeProfit", "") or ""
                     sl_raw = info.get("stopLoss", "") or ""
