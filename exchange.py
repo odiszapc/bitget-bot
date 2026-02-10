@@ -102,6 +102,10 @@ class Exchange:
             free = balance.get("free", {}).get("USDT", 0)
             used = balance.get("used", {}).get("USDT", 0)
             logger.info(f"Balance raw: total={total}, free={free}, used={used}")
+            # Log all non-zero balances
+            for currency, amount in balance.get("total", {}).items():
+                if amount and float(amount) > 0:
+                    logger.info(f"Balance {currency}: total={amount}, free={balance.get('free', {}).get(currency, 0)}, used={balance.get('used', {}).get(currency, 0)}")
             return float(total) if total else 0.0
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
