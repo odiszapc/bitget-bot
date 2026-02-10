@@ -141,6 +141,7 @@ class Exchange:
                             "percentage": float(pos.get("percentage", 0)),
                             "take_profit": float(tp_raw) if tp_raw else 0,
                             "stop_loss": float(sl_raw) if sl_raw else 0,
+                            "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
                         }
                     )
             return open_positions

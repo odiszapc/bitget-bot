@@ -81,6 +81,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             pnl_pct = ep.get("percentage", 0)
             current_price = ep.get("mark_price", 0) or entry_price
             leverage = ep.get("leverage", 0)
+            liq_price = ep.get("liquidation_price", 0)
             total_unrealized += unrealized_pnl
 
             pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
@@ -96,12 +97,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{margin:.2f}</td>
                 <td>{sl if sl else '-'}</td>
                 <td>{tp if tp else '-'}</td>
+                <td>{liq_price if liq_price else '-'}</td>
                 <td class="{pnl_class}">{unrealized_pnl:+.4f}</td>
                 <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
                 <td>{opened_str}</td>
             </tr>"""
     else:
-        position_rows = '<tr><td colspan="10" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="11" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     daily_class = "positive" if daily_pnl >= 0 else "negative"
@@ -682,6 +684,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Margin</th>
             <th>SL</th>
             <th>TP</th>
+            <th>Liq</th>
             <th>PnL</th>
             <th>PnL %</th>
             <th>Opened</th>
