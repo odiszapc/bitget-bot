@@ -198,8 +198,15 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             volume_cell = _strat_cell("volume")
 
             modal_id = f"modal-{idx}"
+            # Chart URLs for preview panel (data attributes)
+            preview_charts = chart_map.get(sr["symbol"], {})
+            cache_bust = int(now_dt.timestamp())
+            d_1m = f'{preview_charts["1m"]}?t={cache_bust}' if "1m" in preview_charts else ""
+            d_15m = f'{preview_charts["15m"]}?t={cache_bust}' if "15m" in preview_charts else ""
+            d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
             scan_rows += f"""
-            <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'">
+            <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
+                data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
@@ -546,6 +553,52 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         text-transform: uppercase;
         margin-bottom: 4px;
     }}
+    /* Preview panel (hover) */
+    .preview-panel {{
+        display: none;
+        position: fixed;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 340px;
+        background: #161b22;
+        border: 1px solid #21262d;
+        border-radius: 10px;
+        padding: 14px;
+        z-index: 50;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }}
+    .preview-panel.visible {{
+        display: block;
+    }}
+    .preview-symbol {{
+        font-size: 14px;
+        font-weight: 700;
+        color: #58a6ff;
+        margin-bottom: 10px;
+    }}
+    .preview-charts {{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }}
+    .preview-chart-label {{
+        font-size: 10px;
+        color: #484f58;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }}
+    .preview-chart img {{
+        width: 100%;
+        border-radius: 4px;
+        border: 1px solid #21262d;
+    }}
+    .preview-empty {{
+        font-size: 12px;
+        color: #484f58;
+        text-align: center;
+        padding: 24px 0;
+    }}
 </style>
 </head>
 <body>
@@ -625,6 +678,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 <div class="footer">Bitget Short Bot</div>
 
+<div class="preview-panel" id="preview-panel">
+    <div class="preview-symbol" id="preview-symbol"></div>
+    <div class="preview-charts" id="preview-charts"></div>
+</div>
+
 {modal_html}
 
 <script>
@@ -660,6 +718,45 @@ document.addEventListener("keydown", function(e) {{
         modals.forEach(function(m) {{ m.style.display = "none"; }});
     }}
 }});
+
+// Preview panel on hover
+(function() {{
+    var panel = document.getElementById("preview-panel");
+    var symEl = document.getElementById("preview-symbol");
+    var chartsEl = document.getElementById("preview-charts");
+    if (!panel) return;
+
+    var rows = document.querySelectorAll(".scan-row");
+    rows.forEach(function(row) {{
+        row.addEventListener("mouseenter", function() {{
+            var symbol = row.getAttribute("data-symbol") || "";
+            var tfs = [
+                ["1 min", row.getAttribute("data-1m")],
+                ["15 min", row.getAttribute("data-15m")],
+                ["1 hour", row.getAttribute("data-1h")]
+            ];
+            symEl.textContent = symbol;
+            chartsEl.innerHTML = "";
+            var hasAny = false;
+            tfs.forEach(function(tf) {{
+                if (tf[1]) {{
+                    hasAny = true;
+                    var div = document.createElement("div");
+                    div.className = "preview-chart";
+                    div.innerHTML = '<div class="preview-chart-label">' + tf[0] + '</div><img src="' + tf[1] + '">';
+                    chartsEl.appendChild(div);
+                }}
+            }});
+            if (!hasAny) {{
+                chartsEl.innerHTML = '<div class="preview-empty">No charts</div>';
+            }}
+            panel.classList.add("visible");
+        }});
+        row.addEventListener("mouseleave", function() {{
+            panel.classList.remove("visible");
+        }});
+    }});
+}})();
 </script>
 
 </body>

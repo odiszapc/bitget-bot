@@ -210,11 +210,12 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         )
 
     # ── Step 7b: Generate charts for top pairs ──
-    try:
-        chart_map = generate_charts_for_symbols(exchange, scan_results)
-    except Exception as e:
-        logger.error(f"Error generating charts: {e}")
-        chart_map = {}
+    chart_map = {}
+    if config.get("charts_enabled", False):
+        try:
+            chart_map = generate_charts_for_symbols(exchange, scan_results)
+        except Exception as e:
+            logger.error(f"Error generating charts: {e}")
 
     # ── Step 8: Execute trade (only if safe) ──
     candidates = [s for s in scan_results if s["signal_count"] >= min_signals]
