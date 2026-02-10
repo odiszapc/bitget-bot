@@ -299,9 +299,17 @@ class Exchange:
                 amount = self.exchange.amount_to_precision(symbol, amount)
                 amount = float(amount)
 
+            order_params = {
+                "tradeSide": "sell_single",
+                "takeProfit": {
+                    "triggerPrice": take_profit_price,
+                    "type": "market",
+                },
+            }
+
             logger.info(
                 f"Opening SHORT (manual) {symbol}: amount={amount}, "
-                f"price={current_price}, TP={take_profit_price}, no SL"
+                f"price={current_price}, TP={take_profit_price}, no SL, params={order_params}"
             )
 
             order = self._api_call("create_order",
@@ -309,13 +317,7 @@ class Exchange:
                 type="market",
                 side="sell",
                 amount=amount,
-                params={
-                    "holdSide": "sell",
-                    "takeProfit": {
-                        "triggerPrice": take_profit_price,
-                        "type": "market",
-                    },
-                },
+                params=order_params,
             )
 
             logger.info(f"Manual order placed: {order['id']}")
