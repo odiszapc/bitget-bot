@@ -152,7 +152,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         rps = api_calls / (cycle_minutes * 60)
         logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
@@ -270,7 +270,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     rps = api_calls / (cycle_minutes * 60)
     logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
     save_state(state)
-    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy, "api_calls": api_calls}
+    cycle_info = {"checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes, "scan_results": scan_results, "active_strategy": active_strategy, "api_calls": api_calls, "config": config}
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
 

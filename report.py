@@ -36,6 +36,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     start_balance = state.get("start_balance", 0.0)
     positions = state.get("positions", {})
 
+    # Config values for display
+    cfg = cycle_info.get("config", {}) if cycle_info else {}
+    leverage = cfg.get("leverage", 10)
+    tp_roi = cfg.get("min_tp_pct", 0.2) * leverage
+    sl_roi = cfg.get("min_stop_pct", 2.0) * leverage
+
     # Build exchange position lookup: symbol -> unrealized_pnl, percentage
     exch_lookup = {}
     for ep in exchange_positions:
@@ -260,6 +266,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         border-radius: 8px;
         padding: 16px;
     }}
+    .card-settings {{
+        background: #13171e;
+        border-style: dashed;
+    }}
     .card .label {{
         font-size: 11px;
         color: #484f58;
@@ -441,6 +451,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="card">
         <div class="label">Win Rate</div>
         <div class="value neutral">{win_rate:.1f}%</div>
+    </div>
+    <div class="card card-settings">
+        <div class="label">TP (ROI)</div>
+        <div class="value positive">+{tp_roi:.1f}%</div>
+    </div>
+    <div class="card card-settings">
+        <div class="label">SL (ROI)</div>
+        <div class="value negative">-{sl_roi:.1f}%</div>
     </div>
 </div>
 
