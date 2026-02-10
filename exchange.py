@@ -241,15 +241,9 @@ class Exchange:
                 side="sell",
                 amount=amount,
                 params={
-                    "hedged": False,
-                    "stopLoss": {
-                        "triggerPrice": stop_loss_price,
-                        "type": "market",
-                    },
-                    "takeProfit": {
-                        "triggerPrice": take_profit_price,
-                        "type": "market",
-                    },
+                    "tradeSide": "open",
+                    "presetStopSurplusPrice": str(take_profit_price),
+                    "presetStopLossPrice": str(stop_loss_price),
                 },
             )
 
@@ -304,34 +298,16 @@ class Exchange:
                 f"price={current_price}, TP={take_profit_price}, no SL"
             )
 
-            # Step 1: Open position (one-way mode)
             order = self._api_call("create_order",
                 symbol=symbol,
                 type="market",
                 side="sell",
                 amount=amount,
-                params={"hedged": False},
+                params={
+                    "tradeSide": "open",
+                    "presetStopSurplusPrice": str(take_profit_price),
+                },
             )
-
-            logger.info(f"Manual order placed: {order['id']}, setting TP...")
-
-            # Step 2: Set TP as a separate trigger order
-            try:
-                self._api_call("create_order",
-                    symbol=symbol,
-                    type="market",
-                    side="buy",
-                    amount=amount,
-                    params={
-                        "hedged": False,
-                        "stopLossPrice": None,
-                        "takeProfitPrice": take_profit_price,
-                        "triggerType": "mark_price",
-                    },
-                )
-                logger.info(f"TP set at {take_profit_price} for {symbol}")
-            except Exception as tp_err:
-                logger.warning(f"Could not set TP for {symbol}: {tp_err}")
 
             return {
                 "order_id": order["id"],
