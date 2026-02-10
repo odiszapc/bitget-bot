@@ -5,6 +5,7 @@ Handles all communication with the exchange.
 
 import ccxt
 import time
+import math
 import logging
 from typing import Optional
 
@@ -43,6 +44,13 @@ class Exchange:
         """Call a ccxt method and increment the API counter."""
         self.api_call_count += 1
         return getattr(self.exchange, method)(*args, **kwargs)
+
+    def _get_price_decimals(self, symbol: str) -> int:
+        """Get number of decimal places for a symbol's price."""
+        tick = self.exchange.markets.get(symbol, {}).get("precision", {}).get("price", 0.01)
+        if tick and tick < 1:
+            return max(0, int(round(-math.log10(tick))))
+        return 2
 
     def reset_api_counter(self) -> int:
         """Reset counter and return previous value."""
@@ -119,7 +127,6 @@ class Exchange:
             for pos in positions:
                 contracts = float(pos.get("contracts", 0))
                 if contracts > 0:
-                    logger.info(f"Position raw: symbol={pos.get('symbol')} entry={pos.get('entryPrice')} mark={pos.get('markPrice')} liq={pos.get('liquidationPrice')} pnl={pos.get('unrealizedPnl')} pct={pos.get('percentage')}")
                     info = pos.get("info", {})
                     tp_raw = info.get("takeProfit", "") or ""
                     sl_raw = info.get("stopLoss", "") or ""
@@ -143,7 +150,7 @@ class Exchange:
                             "take_profit": float(tp_raw) if tp_raw else 0,
                             "stop_loss": float(sl_raw) if sl_raw else 0,
                             "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
-                            "price_precision": int(self.exchange.markets.get(pos["symbol"], {}).get("precision", {}).get("price", 2)),
+                            "price_precision": self._get_price_decimals(pos["symbol"]),
                         }
                     )
             return open_positions
