@@ -148,6 +148,36 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         api_limit = 20
         api_class = "negative" if api_rps > api_limit * 0.8 else "positive"
 
+        # Build market indicators (OI + Volume)
+        oi_changes = cycle_info.get("oi_changes", [])
+        market_vol_ratio = cycle_info.get("market_volume_ratio", 1.0)
+        oi_spike_threshold = cycle_info.get("config", {}).get("oi_spike_pct", 10.0)
+        vol_spike_threshold = cycle_info.get("config", {}).get("market_volume_spike_multiplier", 3.0)
+
+        indicators_html = ""
+        if oi_changes or market_vol_ratio != 1.0:
+            # Volume indicator
+            vol_class = "negative" if market_vol_ratio >= vol_spike_threshold else "positive"
+            indicators_html += f'<div class="indicator"><span class="indicator-label">Market Volume:</span> <span class="{vol_class}">{market_vol_ratio:.1f}x avg</span> <span class="muted">(limit: {vol_spike_threshold}x)</span></div>\n'
+
+            # OI indicator
+            if oi_changes:
+                top_oi = sorted(oi_changes, key=lambda c: abs(c["oi_change_pct"]), reverse=True)[:5]
+                oi_items = ""
+                for c in top_oi:
+                    sym = c["symbol"].split("/")[0]
+                    pct = c["oi_change_pct"]
+                    oi_cls = "negative" if abs(pct) >= oi_spike_threshold else ("warning" if abs(pct) >= oi_spike_threshold * 0.5 else "positive")
+                    oi_items += f'<span class="oi-tag {oi_cls}">{_esc(sym)} {pct:+.1f}%</span> '
+                avg_oi = sum(c["oi_change_pct"] for c in oi_changes) / len(oi_changes)
+                avg_oi_cls = "negative" if abs(avg_oi) >= oi_spike_threshold else "positive"
+                indicators_html += f'<div class="indicator"><span class="indicator-label">OI Changes:</span> {oi_items}</div>\n'
+                indicators_html += f'<div class="indicator"><span class="indicator-label">OI Avg:</span> <span class="{avg_oi_cls}">{avg_oi:+.1f}%</span> <span class="muted">({len(oi_changes)} pairs, limit: {oi_spike_threshold}%)</span></div>\n'
+            else:
+                indicators_html += '<div class="indicator"><span class="indicator-label">OI:</span> <span class="muted">no data (first cycle)</span></div>\n'
+
+        indicators_section = f'<div class="indicators">{indicators_html}</div>' if indicators_html else ""
+
         cycle_section = f"""
 <div class="cycle-panel">
     <div class="cycle-header">
@@ -156,6 +186,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="cycle-time">{api_calls} api calls <span class="{api_class}">({api_rps:.2f}/sec, limit {api_limit}/sec)</span></div>
     </div>
     <div class="checks">{checks_html}</div>
+    {indicators_section}
     <div class="outcome {outcome_class}">{_esc(outcome)}</div>
     <div class="countdown-row">
         <span class="countdown-label">Next cycle in</span>
@@ -462,6 +493,32 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .check.fail {{
         color: #f85149;
     }}
+    .indicators {{
+        margin: 10px 0;
+        padding: 10px 0;
+        border-top: 1px solid #21262d;
+    }}
+    .indicator {{
+        font-size: 13px;
+        padding: 3px 0;
+        color: #8b949e;
+    }}
+    .indicator-label {{
+        color: #8b949e;
+        font-weight: 600;
+    }}
+    .oi-tag {{
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin: 1px 2px;
+        background: #161b22;
+        border: 1px solid #30363d;
+    }}
+    .oi-tag.positive {{ color: #3fb950; border-color: #238636; }}
+    .oi-tag.negative {{ color: #f85149; border-color: #da3633; }}
+    .oi-tag.warning {{ color: #d29922; border-color: #9e6a03; }}
     .outcome {{
         font-size: 13px;
         font-weight: 600;

@@ -367,6 +367,18 @@ class Exchange:
             logger.error(f"Error updating SL for {symbol}: {e}")
             return False
 
+    def get_open_interest(self, symbol: str) -> Optional[dict]:
+        """Get current open interest for a symbol."""
+        try:
+            oi = self._api_call("fetch_open_interest", symbol)
+            return {
+                "amount": float(oi.get("openInterestAmount", 0) or 0),
+                "value": float(oi.get("openInterestValue", 0) or 0),
+            }
+        except Exception as e:
+            logger.debug(f"Could not get OI for {symbol}: {e}")
+            return None
+
     def get_funding_rate(self, symbol: str) -> Optional[float]:
         """Get current funding rate for a symbol."""
         try:
