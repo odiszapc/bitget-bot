@@ -254,6 +254,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div><small>Classic:</small> {_esc(c_sigs)}</div>
             <div><small>Volume:</small> {_esc(v_sigs)}</div>
         </div>
+        <div class="modal-actions">
+            <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">SHORT &middot; TP +{tp_roi:.1f}% ROI</button>
+            <div class="short-result"></div>
+        </div>
         <div class="modal-charts">
             {chart_imgs if chart_imgs else '<div class="empty">No charts available</div>'}
         </div>
@@ -550,6 +554,57 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .modal-signals small {{
         color: #484f58;
     }}
+    .modal-actions {{
+        margin-bottom: 16px;
+    }}
+    .short-btn {{
+        background: #da3633;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 20px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.5px;
+    }}
+    .short-btn:hover {{
+        background: #f85149;
+    }}
+    .short-btn:disabled {{
+        cursor: default;
+        opacity: 0.7;
+    }}
+    .short-btn.loading {{
+        pointer-events: none;
+        opacity: 0.7;
+    }}
+    .short-btn.success {{
+        background: #238636;
+    }}
+    .short-btn .btn-spinner {{
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid #fff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-right: 6px;
+    }}
+    .short-result {{
+        font-size: 12px;
+        margin-top: 8px;
+        line-height: 1.5;
+    }}
+    .short-result.error {{
+        color: #f85149;
+    }}
+    .short-result.ok {{
+        color: #8b949e;
+    }}
     .modal-charts {{
         display: flex;
         flex-direction: column;
@@ -748,6 +803,47 @@ document.addEventListener("keydown", function(e) {{
         modals.forEach(function(m) {{ m.style.display = "none"; }});
     }}
 }});
+
+// Manual SHORT button
+function doShort(symbol, btn) {{
+    var resultEl = btn.parentElement.querySelector(".short-result");
+    var originalText = btn.textContent;
+    btn.disabled = true;
+    btn.classList.add("loading");
+    btn.innerHTML = '<span class="btn-spinner"></span>Opening...';
+    resultEl.textContent = "";
+    resultEl.className = "short-result";
+
+    var apiUrl = window.location.protocol + "//" + window.location.hostname + ":8432/api/short";
+    fetch(apiUrl, {{
+        method: "POST",
+        headers: {{"Content-Type": "application/json"}},
+        body: JSON.stringify({{symbol: symbol}})
+    }})
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+        btn.classList.remove("loading");
+        if (data.ok) {{
+            btn.classList.add("success");
+            btn.textContent = "Done";
+            var o = data.order;
+            resultEl.className = "short-result ok";
+            resultEl.textContent = "Entry: " + o.entry_price + " | TP: " + o.take_profit + " | Margin: " + o.margin + " USDT";
+        }} else {{
+            btn.disabled = false;
+            btn.textContent = originalText;
+            resultEl.className = "short-result error";
+            resultEl.textContent = data.error || "Unknown error";
+        }}
+    }})
+    .catch(function(e) {{
+        btn.classList.remove("loading");
+        btn.disabled = false;
+        btn.textContent = originalText;
+        resultEl.className = "short-result error";
+        resultEl.textContent = "Network error: " + e.message;
+    }});
+}}
 
 // Preview panel on hover
 (function() {{

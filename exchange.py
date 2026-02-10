@@ -270,6 +270,70 @@ class Exchange:
             logger.error(f"Error opening short for {symbol}: {e}")
             return None
 
+    def open_short_tp_only(
+        self,
+        symbol: str,
+        amount_usdt: float,
+        take_profit_price: float,
+    ) -> Optional[dict]:
+        """
+        Open a short position with TP only (no SL).
+        For manual trades where user manages risk themselves.
+        """
+        try:
+            self.set_margin_mode(symbol, "cross")
+            self.set_leverage(symbol, self.leverage)
+
+            ticker = self.get_ticker(symbol)
+            if not ticker:
+                return None
+
+            current_price = ticker["last"]
+
+            position_value = amount_usdt * self.leverage
+            amount = position_value / current_price
+
+            market = self.exchange.markets.get(symbol)
+            if market:
+                amount = self.exchange.amount_to_precision(symbol, amount)
+                amount = float(amount)
+
+            logger.info(
+                f"Opening SHORT (manual) {symbol}: amount={amount}, "
+                f"price={current_price}, TP={take_profit_price}, no SL"
+            )
+
+            order = self._api_call("create_order",
+                symbol=symbol,
+                type="market",
+                side="sell",
+                amount=amount,
+                params={
+                    "takeProfit": {
+                        "triggerPrice": take_profit_price,
+                        "type": "market",
+                    },
+                },
+            )
+
+            logger.info(f"Manual order placed: {order['id']}")
+
+            return {
+                "order_id": order["id"],
+                "symbol": symbol,
+                "side": "short",
+                "entry_price": current_price,
+                "amount": amount,
+                "margin_usdt": amount_usdt,
+                "stop_loss": 0,
+                "take_profit": take_profit_price,
+                "timestamp": time.time(),
+            }
+
+        except Exception as e:
+            logger.error(f"Error opening manual short for {symbol}: {e}")
+            return None
+
     def update_stop_loss(self, symbol: str, new_sl_price: float) -> bool:
         """Update stop-loss for an open position."""
         try:

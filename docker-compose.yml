@@ -10,6 +10,19 @@ services:
       - TZ=UTC
     restart: unless-stopped
 
+  api:
+    build: .
+    command: ["python", "api_server.py"]
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./data/state.json:/app/state.json
+      - ./data/logs:/app/logs
+    ports:
+      - "8432:8432"
+    environment:
+      - TZ=UTC
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     volumes:
