@@ -290,12 +290,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
                 entry_price = ticker["last"]
                 sl_price, tp_price = calculate_sl_tp(entry_price, atr_pct, config)
 
-                sl_pct = abs(sl_price - entry_price) / entry_price * 100
                 tp_pct = abs(entry_price - tp_price) / entry_price * 100
 
                 logger.info(
                     f"Trade plan: SHORT {symbol} @ {entry_price} | "
-                    f"SL={sl_price} ({sl_pct:.1f}%) | TP={tp_price} ({tp_pct:.1f}%) | "
+                    f"TP={tp_price} ({tp_pct:.1f}%) | no SL | "
                     f"Margin={margin:.2f} USDT"
                 )
 
@@ -307,12 +306,12 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
                         "entry_price": entry_price,
                         "amount": 0,
                         "margin_usdt": margin,
-                        "stop_loss": sl_price,
+                        "stop_loss": 0,
                         "take_profit": tp_price,
                         "timestamp": time.time(),
                     }
                 else:
-                    position = exchange.open_short(symbol, margin, sl_price, tp_price)
+                    position = exchange.open_short_tp_only(symbol, margin, tp_price)
 
                 if position:
                     add_position(state, position)
