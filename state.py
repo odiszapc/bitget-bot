@@ -7,8 +7,6 @@ import json
 import os
 import time
 import logging
-from datetime import datetime, timezone
-
 logger = logging.getLogger(__name__)
 
 STATE_FILE = "state.json"
@@ -18,14 +16,8 @@ def get_default_state() -> dict:
     """Return a fresh default state."""
     return {
         "start_balance": 0.0,
-        "day_start_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "positions": {},  # symbol -> position info
-        "trades_today": 0,
-        "daily_pnl": 0.0,
         "total_trades": 0,
-        "total_wins": 0,
-        "total_losses": 0,
-        "total_pnl": 0.0,
         "last_cycle_time": 0,
     }
 
@@ -47,16 +39,6 @@ def load_state() -> dict:
                 state[key] = value
 
         logger.info("State loaded from file")
-
-        # Check if it's a new day — reset daily counters
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        if state.get("day_start_utc") != today:
-            logger.info(f"New day detected ({today}), resetting daily counters")
-            state["day_start_utc"] = today
-            state["start_balance"] = 0.0  # Will be set on first cycle
-            state["trades_today"] = 0
-            state["daily_pnl"] = 0.0
-
         return state
 
     except (json.JSONDecodeError, IOError) as e:
@@ -88,7 +70,6 @@ def add_position(state: dict, position: dict):
         "current_sl": position["stop_loss"],  # Track current SL for trailing
         "opened_at": position.get("timestamp", time.time()),
     }
-    state["trades_today"] += 1
     state["total_trades"] += 1
     save_state(state)
     logger.info(f"Position added to state: {symbol}")
@@ -98,16 +79,8 @@ def remove_position(state: dict, symbol: str, pnl: float = 0.0):
     """Remove a closed position from state."""
     if symbol in state["positions"]:
         del state["positions"][symbol]
-        state["daily_pnl"] += pnl
-        state["total_pnl"] += pnl
-        if pnl > 0:
-            state["total_wins"] += 1
-        elif pnl < 0:
-            state["total_losses"] += 1
         save_state(state)
-        logger.info(
-            f"Position removed: {symbol}, PnL: {pnl:+.2f} USDT"
-        )
+        logger.info(f"Position removed: {symbol}")
 
 
 def sync_positions_with_exchange(state: dict, exchange_positions: list[dict], exchange=None):
@@ -185,14 +158,5 @@ def sync_positions_with_exchange(state: dict, exchange_positions: list[dict], ex
 
 def get_stats(state: dict) -> str:
     """Get a formatted stats string."""
-    total = state["total_trades"]
-    wins = state["total_wins"]
-    losses = state["total_losses"]
-    win_rate = (wins / total * 100) if total > 0 else 0
-
-    return (
-        f"📊 Stats: {total} trades | "
-        f"W:{wins} L:{losses} ({win_rate:.1f}% win rate) | "
-        f"Daily P&L: {state['daily_pnl']:+.2f} USDT | "
-        f"Total P&L: {state['total_pnl']:+.2f} USDT"
-    )
+    total = state.get("total_trades", 0)
+    return f"📊 Stats: {total} trades"

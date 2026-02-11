@@ -28,10 +28,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     now_iso = now_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     total_trades = state.get("total_trades", 0)
-    total_wins = state.get("total_wins", 0)
-    total_losses = state.get("total_losses", 0)
-    win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
-    daily_pnl = state.get("daily_pnl", 0.0)
     start_balance = state.get("start_balance", 0.0)
     total_pnl = current_balance - start_balance if start_balance > 0 else 0.0
     positions = state.get("positions", {})
@@ -121,7 +117,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         position_rows = '<tr><td colspan="11" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
-    daily_class = "positive" if daily_pnl >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
 
     # Build cycle info section
