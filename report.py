@@ -30,6 +30,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     total_trades = state.get("total_trades", 0)
     start_balance = state.get("start_balance", 0.0)
     total_pnl = current_balance - start_balance if start_balance > 0 else 0.0
+    total_pnl_pct = (total_pnl / start_balance * 100) if start_balance > 0 else 0.0
     positions = state.get("positions", {})
 
     # Config values for display
@@ -858,12 +859,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
     <div class="card">
-        <div class="label">Unrealized PnL</div>
-        <div class="value {unrealized_class}">{total_unrealized:+.4f} <small style="font-size:12px">USDT</small></div>
+        <div class="label">Total PnL</div>
+        <div class="value {total_class}">{total_pnl:+.2f} <small style="font-size:12px">USDT ({total_pnl_pct:+.1f}%)</small></div>
     </div>
     <div class="card">
-        <div class="label">Total PnL</div>
-        <div class="value {total_class}">{total_pnl:+.4f} <small style="font-size:12px">USDT</small></div>
+        <div class="label">Unrealized PnL</div>
+        <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
     </div>
     <div class="card">
         <div class="label">Trades</div>

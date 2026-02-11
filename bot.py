@@ -342,7 +342,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             else:
                 c['delta'] = None
         close_list.reverse()
-        closes_limit = config.get('recent_closes_count', 10)
+        closes_limit = config.get('recent_closes_count', 12)
         recent_closes = close_list[:closes_limit]
     except Exception as e:
         logger.error(f"Error processing close shorts: {e}")
