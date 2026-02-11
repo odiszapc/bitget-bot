@@ -51,28 +51,28 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     tp_roi = cfg.get("min_tp_pct", 0.2) * leverage
     sl_roi = cfg.get("min_stop_pct", 2.0) * leverage
 
-    # Build exchange position lookup: symbol -> unrealized_pnl, percentage
-    exch_lookup = {}
-    for ep in exchange_positions:
-        exch_lookup[ep["symbol"]] = ep
-
-    # Build position rows
+    # Build position rows from exchange data (live), enriched with state data
     position_rows = ""
     total_unrealized = 0.0
 
-    if positions:
-        for symbol, pos in positions.items():
-            entry_price = pos.get("entry_price", 0)
-            margin = pos.get("margin_usdt", 0)
-            sl = pos.get("current_sl") or pos.get("stop_loss", 0)
-            tp = pos.get("take_profit", 0)
+    short_positions = [ep for ep in exchange_positions if ep["side"] == "short"]
+    if short_positions:
+        for ep in short_positions:
+            symbol = ep["symbol"]
+            tracked = positions.get(symbol, {})
 
-            # Override with live TP/SL: position fields first, then plan orders
-            ep = exch_lookup.get(symbol, {})
-            if ep.get("take_profit"):
-                tp = ep["take_profit"]
-            if ep.get("stop_loss"):
-                sl = ep["stop_loss"]
+            entry_price = ep.get("entry_price", 0)
+            margin = ep.get("margin", 0)
+            leverage = ep.get("leverage", 0)
+            current_price = ep.get("mark_price", 0) or entry_price
+            unrealized_pnl = ep.get("unrealized_pnl", 0)
+            pnl_pct = ep.get("percentage", 0)
+            liq_price = ep.get("liquidation_price", 0)
+            pp = ep.get("price_precision", 2)
+
+            # TP/SL: exchange position fields, then state, then plan orders
+            tp = ep.get("take_profit", 0) or tracked.get("take_profit", 0)
+            sl = ep.get("stop_loss", 0) or tracked.get("current_sl") or tracked.get("stop_loss", 0)
             if exchange and (not tp or not sl):
                 try:
                     tp_sl = exchange.get_tp_sl_for_symbol(symbol)
@@ -83,7 +83,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 except Exception:
                     pass
 
-            opened_ts = pos.get("opened_at", 0)
+            opened_ts = tracked.get("opened_at", 0)
             if opened_ts:
                 opened_dt = datetime.fromtimestamp(opened_ts, tz=timezone.utc)
                 ago_sec = (now_dt - opened_dt).total_seconds()
@@ -97,16 +97,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             else:
                 opened_str = "-"
 
-            unrealized_pnl = ep.get("unrealized_pnl", 0)
-            pnl_pct = ep.get("percentage", 0)
-            current_price = ep.get("mark_price", 0) or entry_price
-            leverage = ep.get("leverage", 0)
-            liq_price = ep.get("liquidation_price", 0)
-            pp = ep.get("price_precision", 2)
             total_unrealized += unrealized_pnl
-
             pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
-
             base, quote = _format_symbol(symbol)
 
             def _fmt_price(v):
@@ -117,7 +109,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
                 <td>{_fmt_price(entry_price)}</td>
                 <td>{_fmt_price(current_price)}</td>
-                <td>{leverage}x</td>
+                <td>{leverage:.0f}x</td>
                 <td>{margin:.2f}</td>
                 <td>{_fmt_price(sl)}</td>
                 <td>{_fmt_price(tp)}</td>
@@ -896,7 +888,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>
 
-<h2>Open Positions ({len(positions)})</h2>
+<h2>Open Positions ({len(short_positions)})</h2>
 <div class="table-wrap">
 <table>
     <thead>
