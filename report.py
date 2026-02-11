@@ -32,8 +32,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     total_losses = state.get("total_losses", 0)
     win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
     daily_pnl = state.get("daily_pnl", 0.0)
-    total_pnl = state.get("total_pnl", 0.0)
     start_balance = state.get("start_balance", 0.0)
+    total_pnl = current_balance - start_balance if start_balance > 0 else 0.0
     positions = state.get("positions", {})
 
     # Config values for display
