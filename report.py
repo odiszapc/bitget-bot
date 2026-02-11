@@ -143,6 +143,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         api_rps = api_calls / (cycle_minutes_js * 60) if cycle_minutes_js > 0 else 0
         api_limit = 20
         api_class = "negative" if api_rps > api_limit * 0.8 else "positive"
+        cycle_duration = cycle_info.get("cycle_duration", 0)
 
         # Build market indicators (OI + Volume)
         oi_changes = cycle_info.get("oi_changes", [])
@@ -179,7 +180,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="cycle-header">
         <h2>Last Cycle</h2>
         <div class="cycle-time">{now}</div>
-        <div class="cycle-time">{api_calls} api calls <span class="{api_class}">({api_rps:.2f}/sec, limit {api_limit}/sec)</span></div>
+        <div class="cycle-time">{api_calls} api calls <span class="{api_class}">({api_rps:.2f}/sec, limit {api_limit}/sec)</span> | cycle {cycle_duration}s</div>
     </div>
     <div class="checks">{checks_html}</div>
     {indicators_section}

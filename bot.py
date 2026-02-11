@@ -69,6 +69,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     logger.info("=" * 60)
     logger.info("Starting new cycle")
 
+    cycle_start = time.time()
     exchange.reset_api_counter()
     cycle_minutes = risk.config.get("cycle_minutes", 15)
 
@@ -352,12 +353,13 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     rps = api_calls / (cycle_minutes * 60)
     logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
     save_state(state)
+    cycle_duration = round(time.time() - cycle_start, 1)
     cycle_info = {
         "checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes,
         "scan_results": scan_results, "active_strategy": active_strategy,
         "api_calls": api_calls, "config": config, "chart_map": chart_map,
         "oi_changes": oi_changes, "market_volume_ratio": market_volume_ratio,
-        "recent_closes": recent_closes,
+        "recent_closes": recent_closes, "cycle_duration": cycle_duration,
     }
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
