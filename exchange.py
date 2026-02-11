@@ -389,6 +389,19 @@ class Exchange:
             logger.debug(f"Could not get funding rate for {symbol}: {e}")
             return None
 
+    def get_recent_close_shorts(self, limit: int = 100) -> list[dict]:
+        """Fetch recent USDT-M futures bills from Bitget."""
+        try:
+            self.api_call_count += 1
+            response = self.exchange.privateMixGetV2MixAccountBill({
+                'productType': 'USDT-FUTURES',
+                'limit': str(limit),
+            })
+            return response.get('data', {}).get('bills', [])
+        except Exception as e:
+            logger.error(f"Error fetching close shorts history: {e}")
+            return []
+
     def get_btc_24h_change(self) -> float:
         """Get BTC/USDT 24h price change percentage."""
         ticker = self.get_ticker("BTC/USDT:USDT")

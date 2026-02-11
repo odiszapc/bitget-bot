@@ -195,6 +195,52 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 """
 
+    # Build recent closes section
+    closes_section = ""
+    if cycle_info:
+        recent_closes = cycle_info.get("recent_closes", [])
+        if recent_closes:
+            now_utc = datetime.now(timezone.utc)
+            closes_rows = ""
+            for i, rc in enumerate(recent_closes):
+                sym = _esc(rc["symbol"])
+                bal = f"{rc['balance']:.2f}"
+                dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
+                time_str = dt.strftime("%b-%d %H:%M")
+                if i == 0:
+                    diff = now_utc - dt
+                    mins = int(diff.total_seconds() / 60)
+                    if mins < 60:
+                        rel = f"{mins} min ago"
+                    elif mins < 1440:
+                        rel = f"{mins // 60} h ago"
+                    else:
+                        rel = f"{mins // 1440} d ago"
+                    time_str += f" ({rel})"
+
+                if rc["delta"] is not None:
+                    delta_str = f"{rc['delta']:+.2f}"
+                    delta_cls = "positive" if rc["delta"] >= 0 else "negative"
+                else:
+                    delta_str = "—"
+                    delta_cls = "muted"
+
+                closes_rows += f'<div class="close-row"><span class="close-sym">{sym}</span><span class="close-bal">{bal}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+
+            closes_section = f"""
+<div class="closes-panel">
+    <h2>Recent Short Closes</h2>
+    <div class="close-rows">{closes_rows}</div>
+</div>
+"""
+        else:
+            closes_section = """
+<div class="closes-panel">
+    <h2>Recent Short Closes</h2>
+    <div class="muted" style="padding:10px 0">No close history yet</div>
+</div>
+"""
+
     # Build market scan section
     scan_section = ""
     modal_html = ""
@@ -459,12 +505,60 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     tr:hover {{
         background: #1c2128;
     }}
+    .top-row {{
+        display: flex;
+        gap: 16px;
+        margin-bottom: 28px;
+    }}
     .cycle-panel {{
         background: #161b22;
         border: 1px solid #21262d;
         border-radius: 8px;
         padding: 16px;
-        margin-bottom: 28px;
+        flex: 1;
+    }}
+    .closes-panel {{
+        background: #161b22;
+        border: 1px solid #21262d;
+        border-radius: 8px;
+        padding: 16px;
+        flex: 1;
+    }}
+    .closes-panel h2 {{
+        margin-bottom: 12px;
+    }}
+    .close-row {{
+        display: flex;
+        align-items: baseline;
+        gap: 0;
+        padding: 4px 0;
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 13px;
+        border-bottom: 1px solid #21262d;
+    }}
+    .close-row:last-child {{
+        border-bottom: none;
+    }}
+    .close-sym {{
+        width: 70px;
+        color: #c9d1d9;
+        font-weight: 600;
+    }}
+    .close-bal {{
+        width: 80px;
+        text-align: right;
+        color: #8b949e;
+    }}
+    .close-delta {{
+        width: 70px;
+        text-align: right;
+        font-weight: 600;
+    }}
+    .close-time {{
+        flex: 1;
+        text-align: right;
+        color: #484f58;
+        font-size: 12px;
     }}
     .cycle-header {{
         display: flex;
@@ -825,7 +919,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 <div style="height:28px"></div>
 
+<div class="top-row">
 {cycle_section}
+{closes_section}
+</div>
 
 {scan_section}
 

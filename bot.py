@@ -153,7 +153,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         rps = api_calls / (cycle_minutes * 60)
         logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": {}, "oi_changes": [], "market_volume_ratio": 1.0}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": {}, "oi_changes": [], "market_volume_ratio": 1.0, "recent_closes": []}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
@@ -321,6 +321,31 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
                     outcome = f"Failed to open short for {symbol}"
                     logger.error(outcome)
 
+    # ── Fetch recent close shorts for report ──
+    recent_closes = []
+    try:
+        bills = exchange.get_recent_close_shorts()
+        bills.sort(key=lambda b: (int(b.get('cTime', 0)), float(b.get('balance', 0))))
+        for i, b in enumerate(bills):
+            if b.get('businessType') != 'close_short':
+                continue
+            balance = round(float(b.get('balance', 0)), 2)
+            delta = None
+            if i > 0:
+                prev_balance = round(float(bills[i - 1].get('balance', 0)), 2)
+                delta = round(balance - prev_balance, 2)
+            recent_closes.append({
+                'symbol': b.get('symbol', '').replace('USDT', ''),
+                'balance': balance,
+                'delta': delta,
+                'timestamp': int(b.get('cTime', 0)) / 1000,
+            })
+        recent_closes.reverse()
+        closes_limit = config.get('recent_closes_count', 10)
+        recent_closes = recent_closes[:closes_limit]
+    except Exception as e:
+        logger.error(f"Error processing close shorts: {e}")
+
     logger.info(get_stats(state))
     api_calls = exchange.api_call_count
     rps = api_calls / (cycle_minutes * 60)
@@ -331,6 +356,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         "scan_results": scan_results, "active_strategy": active_strategy,
         "api_calls": api_calls, "config": config, "chart_map": chart_map,
         "oi_changes": oi_changes, "market_volume_ratio": market_volume_ratio,
+        "recent_closes": recent_closes,
     }
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
 
