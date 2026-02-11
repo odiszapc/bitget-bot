@@ -398,12 +398,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .updated {{
         font-size: 12px;
-        color: #484f58;
+        color: #6e7681;
         margin-bottom: 2px;
     }}
     .version {{
         font-size: 12px;
-        color: #484f58;
+        color: #c9d1d9;
+        font-weight: 600;
         margin-bottom: 24px;
     }}
     .cards {{
@@ -424,7 +425,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .card .label {{
         font-size: 11px;
-        color: #484f58;
+        color: #6e7681;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 6px;
@@ -447,13 +448,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         background: #1a2a1a;
     }}
     .scan-dim td {{
-        color: #484f58;
+        color: #6e7681;
     }}
     th.strategy-active {{
         color: #58a6ff;
     }}
     .scan-dim td.symbol {{
-        color: #484f58;
+        color: #6e7681;
     }}
     h2 {{
         font-size: 15px;
@@ -475,7 +476,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     th {{
         background: #1c2128;
-        color: #484f58;
+        color: #6e7681;
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -494,12 +495,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         font-weight: 600;
     }}
     td.symbol .quote {{
-        color: #484f58;
+        color: #6e7681;
         font-weight: 400;
     }}
     td.empty {{
         text-align: center;
-        color: #484f58;
+        color: #6e7681;
         padding: 32px;
     }}
     tr:hover {{
@@ -556,8 +557,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .close-time {{
         flex: 1;
-        text-align: right;
-        color: #484f58;
+        text-align: left;
+        padding-left: 12px;
+        color: #6e7681;
         font-size: 12px;
     }}
     .cycle-header {{
@@ -571,7 +573,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .cycle-time {{
         font-size: 12px;
-        color: #484f58;
+        color: #6e7681;
     }}
     .checks {{
         margin-bottom: 10px;
@@ -629,7 +631,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .countdown-label {{
         font-size: 12px;
-        color: #484f58;
+        color: #6e7681;
     }}
     .countdown {{
         font-size: 20px;
@@ -680,7 +682,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .modal-close {{
         font-size: 28px;
-        color: #484f58;
+        color: #6e7681;
         cursor: pointer;
         line-height: 1;
     }}
@@ -700,7 +702,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .modal-stat .label {{
         font-size: 10px;
-        color: #484f58;
+        color: #6e7681;
         text-transform: uppercase;
     }}
     .modal-stat span:last-child {{
@@ -714,7 +716,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         line-height: 1.6;
     }}
     .modal-signals small {{
-        color: #484f58;
+        color: #6e7681;
     }}
     .modal-actions {{
         margin-bottom: 16px;
@@ -779,7 +781,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .modal-chart-label {{
         font-size: 11px;
-        color: #484f58;
+        color: #6e7681;
         text-transform: uppercase;
         margin-bottom: 4px;
     }}
@@ -814,7 +816,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .preview-chart-label {{
         font-size: 10px;
-        color: #484f58;
+        color: #6e7681;
         text-transform: uppercase;
         margin-bottom: 2px;
     }}
@@ -839,7 +841,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .preview-empty {{
         font-size: 12px;
-        color: #484f58;
+        color: #6e7681;
         text-align: center;
         padding: 24px 0;
     }}
@@ -849,24 +851,20 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 <h1>Bitget Short Bot</h1>
 <div class="updated">Last updated: {now}</div>
-<div class="version">{_esc(_load_version())}</div>
+<div class="version">Ver: {_esc(_load_version())}</div>
 
 <div class="cards">
     <div class="card">
         <div class="label">Balance</div>
-        <div class="value neutral">{current_balance:.2f} <small style="font-size:12px;color:#484f58">USDT</small></div>
+        <div class="value neutral">{current_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
-        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#484f58">USDT</small></div>
+        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
     <div class="card">
         <div class="label">Unrealized PnL</div>
         <div class="value {unrealized_class}">{total_unrealized:+.4f} <small style="font-size:12px">USDT</small></div>
-    </div>
-    <div class="card">
-        <div class="label">Daily PnL</div>
-        <div class="value {daily_class}">{daily_pnl:+.4f} <small style="font-size:12px">USDT</small></div>
     </div>
     <div class="card">
         <div class="label">Total PnL</div>
@@ -875,14 +873,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="card">
         <div class="label">Trades</div>
         <div class="value neutral">{total_trades}</div>
-    </div>
-    <div class="card">
-        <div class="label">Win / Loss</div>
-        <div class="value neutral">{total_wins} <small style="font-size:14px;color:#3fb950">W</small> / {total_losses} <small style="font-size:14px;color:#f85149">L</small></div>
-    </div>
-    <div class="card">
-        <div class="label">Win Rate</div>
-        <div class="value neutral">{win_rate:.1f}%</div>
     </div>
     <div class="card card-settings">
         <div class="label">TP (ROI)</div>
