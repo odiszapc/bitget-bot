@@ -326,23 +326,24 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     try:
         bills = exchange.get_recent_close_shorts()
         bills.sort(key=lambda b: (int(b.get('cTime', 0)), float(b.get('balance', 0))))
-        for i, b in enumerate(bills):
-            if b.get('businessType') != 'close_short':
-                continue
-            balance = round(float(b.get('balance', 0)), 2)
-            delta = None
+        # Collect only close_short entries
+        close_list = []
+        for b in bills:
+            if b.get('businessType') == 'close_short':
+                close_list.append({
+                    'symbol': b.get('symbol', '').replace('USDT', ''),
+                    'balance': round(float(b.get('balance', 0)), 2),
+                    'timestamp': int(b.get('cTime', 0)) / 1000,
+                })
+        # Delta = difference between consecutive close_short balances
+        for i, c in enumerate(close_list):
             if i > 0:
-                prev_balance = round(float(bills[i - 1].get('balance', 0)), 2)
-                delta = round(balance - prev_balance, 2)
-            recent_closes.append({
-                'symbol': b.get('symbol', '').replace('USDT', ''),
-                'balance': balance,
-                'delta': delta,
-                'timestamp': int(b.get('cTime', 0)) / 1000,
-            })
-        recent_closes.reverse()
+                c['delta'] = round(c['balance'] - close_list[i - 1]['balance'], 2)
+            else:
+                c['delta'] = None
+        close_list.reverse()
         closes_limit = config.get('recent_closes_count', 10)
-        recent_closes = recent_closes[:closes_limit]
+        recent_closes = close_list[:closes_limit]
     except Exception as e:
         logger.error(f"Error processing close shorts: {e}")
 
