@@ -75,7 +75,9 @@ def add_position(state: dict, position: dict):
         "current_sl": position["stop_loss"],  # Track current SL for trailing
         "opened_at": position.get("timestamp", time.time()),
     }
-    state["total_trades"] += 1
+    old_trades = state["total_trades"]
+    state["total_trades"] = old_trades + 1
+    logger.info(f"total_trades INCREMENT: {old_trades} -> {state['total_trades']} (symbol: {symbol})")
     save_state(state)
     logger.info(f"Position added to state: {symbol}")
 
