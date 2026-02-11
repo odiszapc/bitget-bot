@@ -69,6 +69,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     logger.info("=" * 60)
     logger.info("Starting new cycle")
 
+    # Reload state from disk to pick up changes made by api_server
+    fresh = load_state()
+    state.clear()
+    state.update(fresh)
+
     cycle_start = time.time()
     exchange.reset_api_counter()
     cycle_minutes = risk.config.get("cycle_minutes", 15)
