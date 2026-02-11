@@ -517,6 +517,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .top-row {{
         display: flex;
+        flex-wrap: wrap;
         gap: 16px;
         margin-bottom: 28px;
     }}
@@ -526,6 +527,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         border-radius: 8px;
         padding: 16px;
         flex: 1;
+        min-width: 340px;
     }}
     .closes-panel {{
         background: #161b22;
@@ -533,6 +535,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         border-radius: 8px;
         padding: 16px;
         flex: 1;
+        min-width: 340px;
     }}
     .closes-panel h2 {{
         margin-bottom: 12px;
@@ -868,20 +871,20 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="value neutral">{current_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
     <div class="card">
-        <div class="label">Start Balance</div>
-        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT{f" ({start_date_display})" if start_date_display else ""}</small></div>
-    </div>
-    <div class="card">
         <div class="label">Total PnL</div>
         <div class="value {total_class}">{total_pnl:+.2f} <small style="font-size:12px">USDT ({total_pnl_pct:+.1f}%)</small></div>
     </div>
     <div class="card">
-        <div class="label">Unrealized PnL</div>
-        <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
-    </div>
-    <div class="card">
         <div class="label">Trades</div>
         <div class="value neutral">{total_trades}{f' <small style="font-size:12px;color:#6e7681">(days: {days_since_start})</small>' if start_date_str else ""}</div>
+    </div>
+    <div class="card">
+        <div class="label">Start Balance</div>
+        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT{f" ({start_date_display})" if start_date_display else ""}</small></div>
+    </div>
+    <div class="card">
+        <div class="label">Unrealized PnL</div>
+        <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
     </div>
     <div class="card card-settings">
         <div class="label">TP (ROI)</div>
