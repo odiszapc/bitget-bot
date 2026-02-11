@@ -29,6 +29,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
     total_trades = state.get("total_trades", 0)
     start_balance = state.get("start_balance", 0.0)
+
+    # Days since start_date
+    start_date_str = state.get("start_date", "")
+    start_date_display = ""
+    days_since_start = 0
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            days_since_start = (now_dt - start_date).days
+            start_date_display = start_date.strftime("%-d %b %Y")
+        except ValueError:
+            pass
     total_pnl = current_balance - start_balance if start_balance > 0 else 0.0
     total_pnl_pct = (total_pnl / start_balance * 100) if start_balance > 0 else 0.0
     positions = state.get("positions", {})
@@ -857,7 +869,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
-        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
+        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT{f" ({start_date_display})" if start_date_display else ""}</small></div>
     </div>
     <div class="card">
         <div class="label">Total PnL</div>
@@ -869,7 +881,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
     <div class="card">
         <div class="label">Trades</div>
-        <div class="value neutral">{total_trades}</div>
+        <div class="value neutral">{total_trades}{f' <small style="font-size:12px;color:#6e7681">(days: {days_since_start})</small>' if start_date_str else ""}</div>
     </div>
     <div class="card card-settings">
         <div class="label">TP (ROI)</div>
