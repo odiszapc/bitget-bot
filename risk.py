@@ -190,9 +190,8 @@ class RiskManager:
         if slots <= 0:
             return 0.0
 
-        margin = balance / self.max_positions
-        # Reserve a small buffer (2%) for fees and slippage
-        margin *= 0.98
+        position_pct = self.config.get("position_size_pct", 50) / 100
+        margin = balance * position_pct / self.max_positions
         return round(margin, 2)
 
     def calculate_trailing_stop(
