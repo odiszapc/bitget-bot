@@ -61,11 +61,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
     # Build position rows from exchange data (live), enriched with state data
     position_rows = ""
+    position_modals = ""
     total_unrealized = 0.0
+    open_symbols = set()  # track open position symbols for scan table indicator
 
     short_positions = [ep for ep in exchange_positions if ep["side"] == "short"]
     if short_positions:
-        for ep in short_positions:
+        for pidx, ep in enumerate(short_positions):
             symbol = ep["symbol"]
             tracked = positions.get(symbol, {})
 
@@ -108,12 +110,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             total_unrealized += unrealized_pnl
             pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
             base, quote = _format_symbol(symbol)
+            open_symbols.add(symbol)
 
             def _fmt_price(v):
                 return f"{v:.{pp}f}" if v else "-"
 
+            pos_modal_id = f"pos-modal-{pidx}"
             position_rows += f"""
-            <tr>
+            <tr class="pos-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
                 <td>{_fmt_price(entry_price)}</td>
                 <td>{_fmt_price(current_price)}</td>
@@ -126,6 +130,42 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
                 <td>{opened_str}</td>
             </tr>"""
+
+            # Build position modal with charts
+            chart_map_ci = cycle_info.get("chart_map", {}) if cycle_info else {}
+            pos_charts = chart_map_ci.get(symbol, {})
+            cache_bust_pos = int(now_dt.timestamp())
+            pos_chart_imgs = ""
+            for tf_label, tf_key in [("1 min", "1m"), ("15 min", "15m"), ("1 hour", "1h")]:
+                src = pos_charts.get(tf_key, "")
+                if src:
+                    pos_chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}?t={cache_bust_pos}" alt="{_esc(base)} {tf_label}"></div>\n'
+
+            position_modals += f"""
+<div class="modal-overlay" id="{pos_modal_id}" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="modal-symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></span>
+            <span class="modal-close" onclick="this.closest('.modal-overlay').style.display='none'">&times;</span>
+        </div>
+        <div class="modal-stats">
+            <div class="modal-stat"><span class="label">Entry</span><span>{_fmt_price(entry_price)}</span></div>
+            <div class="modal-stat"><span class="label">Current</span><span>{_fmt_price(current_price)}</span></div>
+            <div class="modal-stat"><span class="label">Leverage</span><span>{leverage:.0f}x</span></div>
+            <div class="modal-stat"><span class="label">Margin</span><span>{margin:.2f}</span></div>
+            <div class="modal-stat"><span class="label">PnL</span><span class="{pnl_class}">{unrealized_pnl:+.4f} ({pnl_pct:+.2f}%)</span></div>
+        </div>
+        <div class="modal-stats">
+            <div class="modal-stat"><span class="label">SL</span><span>{_fmt_price(sl)}</span></div>
+            <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(tp)}</span></div>
+            <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(liq_price)}</span></div>
+            <div class="modal-stat"><span class="label">Opened</span><span>{opened_str}</span></div>
+        </div>
+        <div class="modal-charts">
+            {pos_chart_imgs if pos_chart_imgs else '<div class="empty">No charts available</div>'}
+        </div>
+    </div>
+</div>"""
     else:
         position_rows = '<tr><td colspan="11" class="empty">No open positions</td></tr>'
 
@@ -307,10 +347,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             d_1m = f'{preview_charts["1m"]}?t={cache_bust}' if "1m" in preview_charts else ""
             d_15m = f'{preview_charts["15m"]}?t={cache_bust}' if "15m" in preview_charts else ""
             d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
+            pos_dot = ' <span class="pos-dot"></span>' if sr["symbol"] in open_symbols else ""
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
-                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
+                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
@@ -673,6 +714,27 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .scan-row:hover {{
         background: #1c2128 !important;
     }}
+    .pos-row {{
+        cursor: pointer;
+    }}
+    .pos-row:hover {{
+        background: #1c2128 !important;
+    }}
+    .pos-dot {{
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: #d29922;
+        border-radius: 50%;
+        margin-left: 6px;
+        vertical-align: middle;
+        box-shadow: 0 0 6px rgba(210, 153, 34, 0.5);
+        animation: dot-pulse 2s ease-in-out infinite;
+    }}
+    @keyframes dot-pulse {{
+        0%, 100% {{ opacity: 1; box-shadow: 0 0 6px rgba(210, 153, 34, 0.5); }}
+        50% {{ opacity: 0.6; box-shadow: 0 0 2px rgba(210, 153, 34, 0.3); }}
+    }}
     .footer {{
         margin-top: 32px;
         font-size: 11px;
@@ -1021,6 +1083,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 
 {modal_html}
+{position_modals}
 
 <script>
 (function() {{
