@@ -17,6 +17,7 @@ services:
       - ./config.json:/app/config.json:ro
       - ./data/state.json:/app/state.json
       - ./data/logs:/app/logs
+      - ./data/output:/app/output
     ports:
       - "8432:8432"
     environment:
