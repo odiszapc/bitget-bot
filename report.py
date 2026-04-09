@@ -207,49 +207,63 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 </div>
 """
 
-    # Build recent closes section
+    # Build recent shorts section (open positions + closed shorts)
     closes_section = ""
     if cycle_info:
         recent_closes = cycle_info.get("recent_closes", [])
-        if recent_closes:
-            now_utc = datetime.now(timezone.utc)
-            closes_rows = ""
-            for i, rc in enumerate(recent_closes):
-                sym = _esc(rc["symbol"])
-                bal = f"{rc['balance']:.2f}"
-                dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
-                time_str = dt.strftime("%b-%d %H:%M")
-                if i == 0:
-                    diff = now_utc - dt
-                    mins = int(diff.total_seconds() / 60)
-                    if mins < 60:
-                        rel = f"{mins} min ago"
-                    elif mins < 1440:
-                        rel = f"{mins // 60} h ago"
-                    else:
-                        rel = f"{mins // 1440} d ago"
-                    time_str += f" ({rel})"
+        now_utc = datetime.now(timezone.utc)
+        shorts_rows = ""
 
-                if rc["delta"] is not None:
-                    delta_str = f"{rc['delta']:+.2f}"
-                    delta_cls = "positive" if rc["delta"] >= 0 else "negative"
+        # Open positions first (sorted oldest → newest)
+        open_sorted = sorted(pos_data, key=lambda p: p.get("opened_str", ""))
+        running_balance = current_balance
+        for op in open_sorted:
+            sym = _esc(op["base"])
+            pnl = op["unrealized_pnl"]
+            running_balance += pnl
+            bal_str = f"{running_balance:.2f}"
+            delta_str = f"{pnl:+.2f}"
+            delta_cls = "positive" if pnl >= 0 else "negative"
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time close-tag-open">Open</span></div>\n'
+
+        # Closed shorts
+        for i, rc in enumerate(recent_closes):
+            sym = _esc(rc["symbol"])
+            bal = f"{rc['balance']:.2f}"
+            dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
+            time_str = dt.strftime("%b-%d %H:%M")
+            if i == 0 and not pos_data:
+                diff = now_utc - dt
+                mins = int(diff.total_seconds() / 60)
+                if mins < 60:
+                    rel = f"{mins} min ago"
+                elif mins < 1440:
+                    rel = f"{mins // 60} h ago"
                 else:
-                    delta_str = "—"
-                    delta_cls = "muted"
+                    rel = f"{mins // 1440} d ago"
+                time_str += f" ({rel})"
 
-                closes_rows += f'<div class="close-row"><span class="close-sym">{sym}</span><span class="close-bal">{bal}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+            if rc["delta"] is not None:
+                delta_str = f"{rc['delta']:+.2f}"
+                delta_cls = "positive" if rc["delta"] >= 0 else "negative"
+            else:
+                delta_str = "—"
+                delta_cls = "muted"
 
+            shorts_rows += f'<div class="close-row"><span class="close-sym">{sym}</span><span class="close-bal">{bal}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+
+        if shorts_rows:
             closes_section = f"""
 <div class="closes-panel">
-    <h2>Recent Short Closes</h2>
-    <div class="close-rows">{closes_rows}</div>
+    <div class="section-header"><h2>Recent Shorts</h2><button class="refresh-btn" onclick="refreshShorts()" title="Refresh shorts"><svg class="refresh-icon" id="refresh-shorts-icon" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path fill="currentColor" d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg></button></div>
+    <div class="close-rows" id="shorts-body">{shorts_rows}</div>
 </div>
 """
         else:
             closes_section = """
 <div class="closes-panel">
-    <h2>Recent Short Closes</h2>
-    <div class="muted" style="padding:10px 0">No close history yet</div>
+    <div class="section-header"><h2>Recent Shorts</h2><button class="refresh-btn" onclick="refreshShorts()" title="Refresh shorts"><svg class="refresh-icon" id="refresh-shorts-icon" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path fill="currentColor" d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg></button></div>
+    <div class="close-rows" id="shorts-body"><div class="muted" style="padding:10px 0">No shorts yet</div></div>
 </div>
 """
 
@@ -689,6 +703,15 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .close-row:last-child {{
         border-bottom: none;
+    }}
+    .close-open {{
+        background: rgba(88, 166, 255, 0.06);
+        border-left: 2px solid #58a6ff;
+        padding-left: 6px;
+    }}
+    .close-tag-open {{
+        color: #58a6ff !important;
+        font-weight: 600;
     }}
     .close-sym {{
         width: 70px;
@@ -1246,11 +1269,11 @@ function doShort(symbol, btn) {{
     .then(function(data) {{
         btn.classList.remove("loading");
         if (data.ok) {{
-            btn.classList.add("success");
-            btn.textContent = "Done";
-            var o = data.order;
-            resultEl.className = "short-result ok";
-            resultEl.textContent = "Entry: " + o.entry_price + " | TP: " + o.take_profit + " | Margin: " + o.margin + " USDT";
+            // Close the modal, refresh positions and shorts
+            var overlay = btn.closest(".modal-overlay");
+            if (overlay) overlay.style.display = "none";
+            refreshPositions();
+            refreshShorts();
         }} else {{
             btn.disabled = false;
             btn.textContent = originalText;
@@ -1365,6 +1388,56 @@ function refreshPositions() {{
     .catch(function(e) {{
         icon.classList.remove("spinning");
         console.error("Refresh error:", e);
+    }});
+}}
+
+// Refresh Recent Shorts panel
+function refreshShorts() {{
+    var icon = document.getElementById("refresh-shorts-icon");
+    icon.classList.add("spinning");
+
+    var apiUrl = window.location.protocol + "//" + window.location.hostname + ":8432/api/shorts";
+    fetch(apiUrl)
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+        icon.classList.remove("spinning");
+        if (!data.ok) return;
+
+        var container = document.getElementById("shorts-body");
+        var positions = data.positions || [];
+        var closes = data.recent_closes || [];
+        var balance = data.balance || 0;
+        var html = "";
+
+        // Open positions first
+        var running = balance;
+        for (var i = 0; i < positions.length; i++) {{
+            var p = positions[i];
+            running += p.unrealized_pnl;
+            var cls = p.unrealized_pnl >= 0 ? "positive" : "negative";
+            var delta = (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(2);
+            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal">' + running.toFixed(2) + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time close-tag-open">Open</span></div>';
+        }}
+
+        // Closed shorts
+        for (var j = 0; j < closes.length; j++) {{
+            var c = closes[j];
+            var dCls = "muted";
+            var dStr = "\u2014";
+            if (c.delta !== null) {{
+                dCls = c.delta >= 0 ? "positive" : "negative";
+                dStr = (c.delta >= 0 ? "+" : "") + c.delta.toFixed(2);
+            }}
+            var dt = new Date(c.timestamp * 1000);
+            var timeStr = dt.toLocaleDateString("en", {{month:"short",day:"2-digit"}}) + " " + dt.toLocaleTimeString("en", {{hour:"2-digit",minute:"2-digit",hour12:false}});
+            html += '<div class="close-row"><span class="close-sym">' + c.symbol + '</span><span class="close-bal">' + c.balance.toFixed(2) + '</span><span class="close-delta ' + dCls + '">' + dStr + '</span><span class="close-time">' + timeStr + '</span></div>';
+        }}
+
+        container.innerHTML = html || '<div class="muted" style="padding:10px 0">No shorts yet</div>';
+    }})
+    .catch(function(e) {{
+        icon.classList.remove("spinning");
+        console.error("Shorts refresh error:", e);
     }});
 }}
 </script>

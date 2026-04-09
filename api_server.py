@@ -112,6 +112,56 @@ def api_short():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/shorts", methods=["GET"])
+def api_shorts():
+    """Return open positions + recent closed shorts for the Recent Shorts panel."""
+    try:
+        config = load_config()
+        exchange = Exchange(config)
+        exchange.load_markets()
+
+        # Open positions
+        exchange_positions = exchange.get_open_positions()
+        state = load_state()
+        pos_data = build_position_data(exchange_positions, state, exchange)
+
+        balance = exchange.get_balance()
+
+        # Recent closes (same logic as bot.py)
+        recent_closes = []
+        try:
+            bills = exchange.get_recent_close_shorts()
+            bills.sort(key=lambda b: (int(b.get('cTime', 0)), float(b.get('balance', 0))))
+            close_list = []
+            for b in bills:
+                if b.get('businessType') == 'close_short':
+                    close_list.append({
+                        'symbol': b.get('symbol', '').replace('USDT', ''),
+                        'balance': round(float(b.get('balance', 0)), 2),
+                        'timestamp': int(b.get('cTime', 0)) / 1000,
+                    })
+            for i, c in enumerate(close_list):
+                if i > 0:
+                    c['delta'] = round(c['balance'] - close_list[i - 1]['balance'], 2)
+                else:
+                    c['delta'] = None
+            close_list.reverse()
+            closes_limit = config.get('recent_closes_count', 12)
+            recent_closes = close_list[:closes_limit]
+        except Exception as e:
+            logger.error(f"Error fetching close shorts: {e}")
+
+        return jsonify({
+            "ok": True,
+            "positions": pos_data,
+            "recent_closes": recent_closes,
+            "balance": balance,
+        })
+    except Exception as e:
+        logger.exception(f"Error in /api/shorts: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/positions", methods=["GET"])
 def api_positions():
     """Return open positions as JSON for real-time table refresh."""
