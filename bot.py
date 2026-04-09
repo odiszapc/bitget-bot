@@ -197,6 +197,8 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         all_analysis = analyze_all_strategies(df, funding_rate, config)
         active = all_analysis[active_strategy]
 
+        # Flatten composite components to top level for normalization
+        comp = all_analysis.get("composite", {})
         scan_results.append({
             "symbol": symbol,
             "rsi": active["rsi"],
@@ -205,6 +207,13 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             "signal_count": active["signal_count"],
             "signals": active["signals"],
             "details": active["details"],
+            "adx_dir": comp.get("adx_dir", 0),
+            "adx": comp.get("adx", 0),
+            "di_plus": comp.get("di_plus", 0),
+            "di_minus": comp.get("di_minus", 0),
+            "slope": comp.get("slope", 0),
+            "roc_w": comp.get("roc_w", 0),
+            "ema_gap": comp.get("ema_gap", 0),
             **{name: result for name, result in all_analysis.items()},
         })
 
@@ -212,13 +221,6 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     # ── Step 7: Normalize composite scores and sort ──
     normalize_downtrend_scores(scan_results)
-    # Propagate composite score to top-level for unified access
-    for sr in scan_results:
-        comp = sr.get("composite", {})
-        if comp:
-            comp["downtrend_score"] = sr.get("downtrend_score", 0)
-            comp["signal_count"] = sr.get("downtrend_score", 0)  # score IS the signal strength
-        sr["downtrend_score"] = sr.get("downtrend_score", 0)
 
     if active_strategy == "composite":
         scan_results.sort(key=lambda c: c.get("downtrend_score", 0), reverse=True)

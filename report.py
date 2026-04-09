@@ -342,11 +342,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             d_15m = f'{preview_charts["15m"]}?t={cache_bust}' if "15m" in preview_charts else ""
             d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
             pos_dot = ' <span class="pos-dot"></span>' if sr["symbol"] in open_symbols else ""
+
+            # Component detail classes
+            slope_v = sr.get("slope", 0)
+            slope_cls = "positive" if slope_v < -0.05 else ("neg" if slope_v > 0.05 else "muted")
+            roc_v = sr.get("roc_w", 0)
+            roc_cls = "positive" if roc_v < -0.5 else ("neg" if roc_v > 0.5 else "muted")
+            adx_dir_v = sr.get("adx_dir", 0)
+            adx_dir_cls = "positive" if adx_dir_v > 0 else ("neg" if adx_dir_v < -1 else "muted")
+
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
                 <td class="{score_cls}"><b>{dt_score:.0f}</b></td>
+                <td class="{adx_dir_cls}">{adx_dir_v:+.1f}</td>
+                <td class="{slope_cls}">{slope_v:+.3f}</td>
+                <td class="{roc_cls}">{roc_v:+.2f}</td>
+                <td>{sr.get('ema_gap', 0):+.3f}</td>
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
@@ -378,8 +391,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         </div>
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">Score</span><span class="{score_cls}"><b>{dt_score:.0f}</b></span></div>
+            <div class="modal-stat"><span class="label">ADX dir</span><span class="{adx_dir_cls}">{adx_dir_v:+.1f}</span></div>
+            <div class="modal-stat"><span class="label">Slope</span><span class="{slope_cls}">{slope_v:+.3f}</span></div>
+            <div class="modal-stat"><span class="label">ROC</span><span class="{roc_cls}">{roc_v:+.2f}</span></div>
+            <div class="modal-stat"><span class="label">EMA gap</span><span>{sr.get('ema_gap', 0):+.3f}</span></div>
+        </div>
+        <div class="modal-stats">
             <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
             <div class="modal-stat"><span class="label">ATR</span><span>{sr['atr_pct']:.1f}%</span></div>
+            <div class="modal-stat"><span class="label">ADX</span><span>{sr.get('adx', 0):.0f}</span></div>
+            <div class="modal-stat"><span class="label">+DI</span><span>{sr.get('di_plus', 0):.0f}</span></div>
+            <div class="modal-stat"><span class="label">-DI</span><span>{sr.get('di_minus', 0):.0f}</span></div>
             <div class="modal-stat"><span class="label">Funding</span><span>{fr*100:.4f}%</span></div>
             <div class="modal-stat"><span class="label">Classic</span><span>{classic_data.get('signal_count',0)}/{classic_data.get('max_signals',4)}</span></div>
             <div class="modal-stat"><span class="label">Volume</span><span>{volume_data.get('signal_count',0)}/{volume_data.get('max_signals',4)}</span></div>
@@ -436,6 +458,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <tr>
             <th>Symbol</th>
             <th{"" if act_strat != "composite" else ' class="strategy-active"'}>Score</th>
+            <th>ADX dir</th>
+            <th>Slope</th>
+            <th>ROC</th>
+            <th>EMA gap</th>
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
