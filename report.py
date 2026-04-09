@@ -351,9 +351,22 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div><small>Classic:</small> {_esc(c_sigs)}</div>
             <div><small>Volume:</small> {_esc(v_sigs)}</div>
         </div>
-        <div class="modal-bet-info">
-            <span class="label">Manual Bet</span>
-            <span>{manual_margin_pct}% &times; {leverage}x = {manual_exposure_pct:.0f}% of deposit</span>
+        <div class="modal-bet-row">
+            <div class="modal-bet-select">
+                <span class="label">Bet Size</span>
+                <select class="bet-pct-select" onchange="updateExposure(this, {leverage})">
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                    <option value="20" selected>20%</option>
+                    <option value="30">30%</option>
+                    <option value="50">50%</option>
+                    <option value="100">100%</option>
+                </select>
+            </div>
+            <div class="modal-bet-exposure">
+                <span class="label">Exposure</span>
+                <span class="exposure-value">20% &times; {leverage}x = {20 * leverage}%</span>
+            </div>
         </div>
         <div class="modal-actions">
             <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">SHORT &middot; TP +{tp_roi:.1f}% ROI</button>
@@ -734,23 +747,68 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .modal-signals small {{
         color: #6e7681;
     }}
-    .modal-bet-info {{
+    .modal-bet-row {{
         display: flex;
-        align-items: baseline;
-        gap: 10px;
-        padding: 10px 12px;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 14px;
         margin-bottom: 12px;
         background: #13171e;
-        border: 1px dashed #30363d;
-        border-radius: 6px;
-        font-size: 13px;
-        color: #c9d1d9;
+        border: 1px solid #30363d;
+        border-radius: 8px;
     }}
-    .modal-bet-info .label {{
+    .modal-bet-select {{
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }}
+    .modal-bet-select .label,
+    .modal-bet-exposure .label {{
         font-size: 10px;
         color: #6e7681;
         text-transform: uppercase;
         font-weight: 600;
+        letter-spacing: 0.5px;
+    }}
+    .bet-pct-select {{
+        appearance: none;
+        -webkit-appearance: none;
+        background: #0d1117;
+        color: #58a6ff;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 7px 32px 7px 12px;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e7681' fill='none' stroke-width='2'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }}
+    .bet-pct-select:hover {{
+        border-color: #58a6ff;
+    }}
+    .bet-pct-select:focus {{
+        outline: none;
+        border-color: #58a6ff;
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+    }}
+    .bet-pct-select option {{
+        background: #161b22;
+        color: #c9d1d9;
+        padding: 8px;
+    }}
+    .modal-bet-exposure {{
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }}
+    .exposure-value {{
+        font-size: 14px;
+        font-weight: 600;
+        color: #c9d1d9;
     }}
     .modal-actions {{
         margin-bottom: 16px;
@@ -998,8 +1056,21 @@ document.addEventListener("keydown", function(e) {{
     }}
 }});
 
+// Update exposure label when bet % changes
+function updateExposure(sel, leverage) {{
+    var pct = parseInt(sel.value);
+    var exposure = pct * leverage;
+    var row = sel.closest(".modal-bet-row");
+    var label = row.querySelector(".exposure-value");
+    label.innerHTML = pct + "% &times; " + leverage + "x = " + exposure + "%";
+}}
+
 // Manual SHORT button
 function doShort(symbol, btn) {{
+    var modal = btn.closest(".modal-content");
+    var betSelect = modal.querySelector(".bet-pct-select");
+    var betPct = betSelect ? parseInt(betSelect.value) : 20;
+
     var resultEl = btn.parentElement.querySelector(".short-result");
     var originalText = btn.textContent;
     btn.disabled = true;
@@ -1012,7 +1083,7 @@ function doShort(symbol, btn) {{
     fetch(apiUrl, {{
         method: "POST",
         headers: {{"Content-Type": "application/json"}},
-        body: JSON.stringify({{symbol: symbol}})
+        body: JSON.stringify({{symbol: symbol, bet_pct: betPct}})
     }})
     .then(function(r) {{ return r.json(); }})
     .then(function(data) {{

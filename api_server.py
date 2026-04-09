@@ -33,6 +33,14 @@ def api_short():
         if not symbol:
             return jsonify({"ok": False, "error": "Missing symbol"}), 400
 
+        bet_pct = data.get("bet_pct", 20)
+        try:
+            bet_pct = int(bet_pct)
+        except (TypeError, ValueError):
+            bet_pct = 20
+        if bet_pct not in (5, 10, 20, 30, 50, 100):
+            return jsonify({"ok": False, "error": f"Invalid bet_pct: {bet_pct}"}), 400
+
         config = load_config()
         exchange = Exchange(config)
         exchange.load_markets()
@@ -56,12 +64,12 @@ def api_short():
                     "error": f"Position already open for {symbol.split(':')[0]}"
                 }), 400
 
-        # Get balance — use full available balance
+        # Get balance — use selected percentage
         balance = exchange.get_balance()
         if balance <= 0:
             return jsonify({"ok": False, "error": "Zero balance"}), 400
 
-        margin = round(balance * 0.98, 2)
+        margin = round(balance * bet_pct / 100, 2)
 
         # Calculate TP from ATR
         timeframe = config.get("timeframe", "15m")
@@ -88,7 +96,7 @@ def api_short():
         state = load_state()
         add_position(state, position)
 
-        logger.info(f"Manual SHORT opened: {symbol} margin={margin} TP={tp_price}")
+        logger.info(f"Manual SHORT opened: {symbol} margin={margin} ({bet_pct}% of {balance:.2f}) TP={tp_price}")
 
         return jsonify({
             "ok": True,
