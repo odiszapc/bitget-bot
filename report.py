@@ -449,6 +449,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitget Short Bot</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%23f7931a'/><text x='16' y='22' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='bold' fill='white'>&#x20bf;</text></svg>">
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{
