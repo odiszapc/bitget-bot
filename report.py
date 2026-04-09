@@ -694,8 +694,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         flex: 1;
         min-width: 340px;
     }}
-    .closes-panel h2 {{
-        margin-bottom: 12px;
+    .closes-panel .section-header h2 {{
+        margin-bottom: 0;
     }}
     .close-row {{
         display: flex;
