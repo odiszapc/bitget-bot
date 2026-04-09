@@ -48,8 +48,11 @@ def build_position_data(
             except Exception:
                 pass
 
-        # Opened time
+        # Opened time: state first, then exchange timestamp as fallback
         opened_ts = tracked.get("opened_at", 0)
+        if not opened_ts:
+            ex_ts = ep.get("timestamp", 0)
+            opened_ts = ex_ts / 1000 if ex_ts > 1e12 else ex_ts  # ms → sec
         opened_str = "-"
         opened_short_str = "-"
         if opened_ts:

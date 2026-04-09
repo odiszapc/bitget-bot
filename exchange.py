@@ -150,6 +150,7 @@ class Exchange:
                             "take_profit": float(tp_raw) if tp_raw else 0,
                             "stop_loss": float(sl_raw) if sl_raw else 0,
                             "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
+                            "timestamp": pos.get("timestamp", 0) or int(info.get("cTime", 0)),
                             "price_precision": self._get_price_decimals(pos["symbol"]),
                         }
                     )
