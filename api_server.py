@@ -8,7 +8,7 @@ import logging
 from flask import Flask, request, jsonify
 from exchange import Exchange
 from strategy import candles_to_dataframe, calculate_atr  # kept for potential future use
-from state import load_state, add_position
+from state import load_state, add_position, sync_positions_with_exchange
 from positions import build_position_data
 
 logging.basicConfig(
@@ -23,6 +23,17 @@ app = Flask(__name__)
 def load_config() -> dict:
     with open("config.json", "r") as f:
         return json.load(f)
+
+
+def _get_synced_context():
+    """Load config, exchange, sync state — shared setup for all read endpoints."""
+    config = load_config()
+    exchange = Exchange(config)
+    exchange.load_markets()
+    exchange_positions = exchange.get_open_positions()
+    state = load_state()
+    sync_positions_with_exchange(state, exchange_positions, exchange)
+    return config, exchange, exchange_positions, state
 
 
 @app.route("/api/short", methods=["POST"])
@@ -116,15 +127,8 @@ def api_short():
 def api_shorts():
     """Return open positions + recent closed shorts for the Recent Shorts panel."""
     try:
-        config = load_config()
-        exchange = Exchange(config)
-        exchange.load_markets()
-
-        # Open positions
-        exchange_positions = exchange.get_open_positions()
-        state = load_state()
+        config, exchange, exchange_positions, state = _get_synced_context()
         pos_data = build_position_data(exchange_positions, state, exchange)
-
         balance = exchange.get_balance()
 
         # Recent closes (same logic as bot.py)
@@ -166,14 +170,8 @@ def api_shorts():
 def api_positions():
     """Return open positions as JSON for real-time table refresh."""
     try:
-        config = load_config()
-        exchange = Exchange(config)
-        exchange.load_markets()
-
-        exchange_positions = exchange.get_open_positions()
-        state = load_state()
+        config, exchange, exchange_positions, state = _get_synced_context()
         pos_data = build_position_data(exchange_positions, state, exchange)
-
         balance = exchange.get_balance()
 
         return jsonify({
