@@ -355,9 +355,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div><small>Classic:</small> {_esc(c_sigs)}</div>
             <div><small>Volume:</small> {_esc(v_sigs)}</div>
         </div>
-        <div class="modal-bet-row">
-            <div class="modal-bet-select">
-                <span class="label">Bet Size</span>
+        <div class="modal-trade-row">
+            <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">OPEN SHORT</button>
+            <div class="trade-select">
+                <span class="label">Bet</span>
                 <select class="bet-pct-select" onchange="updateExposure(this, {leverage})">
                     <option value="5">5%</option>
                     <option value="10">10%</option>
@@ -367,13 +368,23 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     <option value="100">100%</option>
                 </select>
             </div>
-            <div class="modal-bet-exposure">
-                <span class="label">Exposure</span>
-                <span class="exposure-value">20% &times; {leverage}x = {20 * leverage}%</span>
+            <div class="trade-select">
+                <span class="label">TP ROI</span>
+                <select class="tp-roi-select">
+                    <option value="1">1%</option>
+                    <option value="2">2%</option>
+                    <option value="3" selected>3%</option>
+                    <option value="4">4%</option>
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                </select>
+            </div>
+            <div class="trade-exposure">
+                <span class="label">Exp</span>
+                <span class="exposure-value">20%&times;{leverage}x={20 * leverage}%</span>
             </div>
         </div>
         <div class="modal-actions">
-            <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">SHORT &middot; TP +{tp_roi:.1f}% ROI</button>
             <div class="short-result"></div>
         </div>
         <div class="modal-charts">
@@ -878,68 +889,73 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .modal-signals small {{
         color: #6e7681;
     }}
-    .modal-bet-row {{
+    .modal-trade-row {{
         display: flex;
-        align-items: center;
-        gap: 16px;
+        align-items: flex-end;
+        gap: 12px;
         padding: 12px 14px;
         margin-bottom: 12px;
         background: #13171e;
         border: 1px solid #30363d;
         border-radius: 8px;
+        flex-wrap: wrap;
     }}
-    .modal-bet-select {{
+    .trade-select {{
         display: flex;
         flex-direction: column;
         gap: 4px;
     }}
-    .modal-bet-select .label,
-    .modal-bet-exposure .label {{
+    .trade-select .label,
+    .trade-exposure .label {{
         font-size: 10px;
         color: #6e7681;
         text-transform: uppercase;
         font-weight: 600;
         letter-spacing: 0.5px;
     }}
-    .bet-pct-select {{
+    .bet-pct-select,
+    .tp-roi-select {{
         appearance: none;
         -webkit-appearance: none;
         background: #0d1117;
         color: #58a6ff;
         border: 1px solid #30363d;
         border-radius: 6px;
-        padding: 7px 32px 7px 12px;
+        padding: 7px 28px 7px 10px;
         font-family: inherit;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 700;
         cursor: pointer;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e7681' fill='none' stroke-width='2'/%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e7681' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
-        background-position: right 10px center;
+        background-position: right 8px center;
         transition: border-color 0.15s, box-shadow 0.15s;
     }}
-    .bet-pct-select:hover {{
+    .bet-pct-select:hover,
+    .tp-roi-select:hover {{
         border-color: #58a6ff;
     }}
-    .bet-pct-select:focus {{
+    .bet-pct-select:focus,
+    .tp-roi-select:focus {{
         outline: none;
         border-color: #58a6ff;
         box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
     }}
-    .bet-pct-select option {{
+    .bet-pct-select option,
+    .tp-roi-select option {{
         background: #161b22;
         color: #c9d1d9;
-        padding: 8px;
     }}
-    .modal-bet-exposure {{
+    .trade-exposure {{
         display: flex;
         flex-direction: column;
         gap: 4px;
+        margin-left: auto;
     }}
     .exposure-value {{
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
-        color: #c9d1d9;
+        color: #6e7681;
     }}
     .modal-actions {{
         margin-bottom: 16px;
@@ -1198,18 +1214,21 @@ document.addEventListener("keydown", function(e) {{
 function updateExposure(sel, leverage) {{
     var pct = parseInt(sel.value);
     var exposure = pct * leverage;
-    var row = sel.closest(".modal-bet-row");
+    var row = sel.closest(".modal-trade-row");
     var label = row.querySelector(".exposure-value");
-    label.innerHTML = pct + "% &times; " + leverage + "x = " + exposure + "%";
+    label.innerHTML = pct + "%&times;" + leverage + "x=" + exposure + "%";
 }}
 
 // Manual SHORT button
 function doShort(symbol, btn) {{
-    var modal = btn.closest(".modal-content");
-    var betSelect = modal.querySelector(".bet-pct-select");
+    var row = btn.closest(".modal-trade-row");
+    var betSelect = row.querySelector(".bet-pct-select");
+    var tpSelect = row.querySelector(".tp-roi-select");
     var betPct = betSelect ? parseInt(betSelect.value) : 20;
+    var tpRoi = tpSelect ? parseFloat(tpSelect.value) : 3;
 
-    var resultEl = btn.parentElement.querySelector(".short-result");
+    var modal = btn.closest(".modal-content");
+    var resultEl = modal.querySelector(".short-result");
     var originalText = btn.textContent;
     btn.disabled = true;
     btn.classList.add("loading");
@@ -1221,7 +1240,7 @@ function doShort(symbol, btn) {{
     fetch(apiUrl, {{
         method: "POST",
         headers: {{"Content-Type": "application/json"}},
-        body: JSON.stringify({{symbol: symbol, bet_pct: betPct}})
+        body: JSON.stringify({{symbol: symbol, bet_pct: betPct, tp_roi_pct: tpRoi}})
     }})
     .then(function(r) {{ return r.json(); }})
     .then(function(data) {{

@@ -7,7 +7,7 @@ import json
 import logging
 from flask import Flask, request, jsonify
 from exchange import Exchange
-from strategy import candles_to_dataframe, calculate_atr, calculate_sl_tp
+from strategy import candles_to_dataframe, calculate_atr  # kept for potential future use
 from state import load_state, add_position
 from positions import build_position_data
 
@@ -42,22 +42,20 @@ def api_short():
         if bet_pct not in (5, 10, 20, 30, 50, 100):
             return jsonify({"ok": False, "error": f"Invalid bet_pct: {bet_pct}"}), 400
 
+        tp_roi_pct = data.get("tp_roi_pct", 3)
+        try:
+            tp_roi_pct = float(tp_roi_pct)
+        except (TypeError, ValueError):
+            tp_roi_pct = 3.0
+        if tp_roi_pct not in (1, 2, 3, 4, 5, 10):
+            return jsonify({"ok": False, "error": f"Invalid tp_roi_pct: {tp_roi_pct}"}), 400
+
         config = load_config()
         exchange = Exchange(config)
         exchange.load_markets()
 
-        # Check position limit
-        max_positions = config.get("max_positions", 5)
-        open_positions = exchange.get_open_positions()
-        open_count = len(open_positions)
-
-        if open_count >= max_positions:
-            return jsonify({
-                "ok": False,
-                "error": f"Max positions reached ({open_count}/{max_positions})"
-            }), 400
-
         # Check if already have position on this symbol
+        open_positions = exchange.get_open_positions()
         for pos in open_positions:
             if pos["symbol"] == symbol:
                 return jsonify({
@@ -72,21 +70,19 @@ def api_short():
 
         margin = round(balance * bet_pct / 100, 2)
 
-        # Calculate TP from ATR
-        timeframe = config.get("timeframe", "15m")
-        candles = exchange.get_ohlcv(symbol, timeframe, limit=50)
-        df = candles_to_dataframe(candles)
-        if df is None:
-            return jsonify({"ok": False, "error": "Not enough candle data"}), 400
-
-        atr_pct = calculate_atr(df)
-
+        # Get entry price
         ticker = exchange.get_ticker(symbol)
         if not ticker:
             return jsonify({"ok": False, "error": f"Could not fetch ticker for {symbol}"}), 400
 
         entry_price = ticker["last"]
-        _sl_price, tp_price = calculate_sl_tp(entry_price, atr_pct, config)
+        leverage = config.get("leverage", 10)
+
+        # Calculate TP from selected ROI %
+        # ROI = price_change% * leverage → price_change% = ROI / leverage
+        tp_price_pct = tp_roi_pct / leverage
+        tp_price = entry_price * (1 - tp_price_pct / 100)  # SHORT: TP below entry
+        tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
 
         # Open short with TP only
         position = exchange.open_short_tp_only(symbol, margin, tp_price)
@@ -97,7 +93,7 @@ def api_short():
         state = load_state()
         add_position(state, position)
 
-        logger.info(f"Manual SHORT opened: {symbol} margin={margin} ({bet_pct}% of {balance:.2f}) TP={tp_price}")
+        logger.info(f"Manual SHORT opened: {symbol} margin={margin} ({bet_pct}% of {balance:.2f}) TP={tp_price} (ROI {tp_roi_pct}%)")
 
         return jsonify({
             "ok": True,
