@@ -115,6 +115,31 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             def _fmt_price(v):
                 return f"{v:.{pp}f}" if v else "-"
 
+            # Progress bar calculation for SHORT positions
+            if current_price <= entry_price and tp and entry_price > 0:
+                # In profit — progress toward TP
+                tp_range = entry_price - tp
+                prog_val = ((entry_price - current_price) / tp_range * 100) if tp_range > 0 else 0
+                prog_val = min(100.0, max(0.0, prog_val))
+                prog_cls = "prog-positive"
+                prog_label_l = "TP"
+                prog_label_r = "Entry"
+            elif liq_price and entry_price > 0:
+                # In loss — progress toward liquidation
+                liq_range = liq_price - entry_price
+                prog_val = ((current_price - entry_price) / liq_range * 100) if liq_range > 0 else 0
+                prog_val = min(100.0, max(0.0, prog_val))
+                prog_cls = "prog-negative"
+                prog_label_l = "Entry"
+                prog_label_r = "Liq"
+            else:
+                prog_val = 0
+                prog_cls = "prog-positive"
+                prog_label_l = ""
+                prog_label_r = ""
+
+            prog_bar_html = f"""<div class="prog-wrap"><div class="prog-labels"><span>{prog_label_l}</span><span>{prog_label_r}</span></div><div class="prog-track"><div class="prog-fill {prog_cls}" style="width:{prog_val:.1f}%"></div><div class="prog-thumb {prog_cls}" style="left:{prog_val:.1f}%"></div></div><div class="prog-pct {prog_cls}">{prog_val:.0f}%</div></div>"""
+
             pos_modal_id = f"pos-modal-{pidx}"
             position_rows += f"""
             <tr class="pos-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'">
@@ -129,6 +154,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="{pnl_class}">{unrealized_pnl:+.4f}</td>
                 <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
                 <td>{opened_str}</td>
+                <td>{prog_bar_html}</td>
             </tr>"""
 
             # Build position modal with charts
@@ -161,13 +187,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(liq_price)}</span></div>
             <div class="modal-stat"><span class="label">Opened</span><span>{opened_str}</span></div>
         </div>
+        <div class="modal-progress">{prog_bar_html}</div>
         <div class="modal-charts">
             {pos_chart_imgs if pos_chart_imgs else '<div class="empty">No charts available</div>'}
         </div>
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="11" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="12" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -530,6 +557,81 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         margin-bottom: 12px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+    }}
+    /* Progress bar */
+    .prog-wrap {{
+        min-width: 110px;
+    }}
+    .prog-labels {{
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        color: #6e7681;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }}
+    .prog-track {{
+        position: relative;
+        height: 8px;
+        background: #21262d;
+        border-radius: 4px;
+        overflow: visible;
+    }}
+    .prog-fill {{
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }}
+    .prog-fill.prog-positive {{
+        background: linear-gradient(90deg, #238636, #3fb950);
+    }}
+    .prog-fill.prog-negative {{
+        background: linear-gradient(90deg, #da3633, #f85149);
+    }}
+    .prog-thumb {{
+        position: absolute;
+        top: -3px;
+        width: 3px;
+        height: 14px;
+        border-radius: 2px;
+        transform: translateX(-1px);
+    }}
+    .prog-thumb.prog-positive {{
+        background: #3fb950;
+        box-shadow: 0 0 6px rgba(63, 185, 80, 0.5);
+    }}
+    .prog-thumb.prog-negative {{
+        background: #f85149;
+        box-shadow: 0 0 6px rgba(248, 81, 73, 0.5);
+    }}
+    .prog-pct {{
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 3px;
+        text-align: center;
+    }}
+    .prog-pct.prog-positive {{ color: #3fb950; }}
+    .prog-pct.prog-negative {{ color: #f85149; }}
+    .modal-progress {{
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        background: #13171e;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+    }}
+    .modal-progress .prog-wrap {{
+        min-width: unset;
+    }}
+    .modal-progress .prog-track {{
+        height: 12px;
+    }}
+    .modal-progress .prog-thumb {{
+        height: 18px;
+        top: -3px;
+    }}
+    .modal-progress .prog-pct {{
+        font-size: 14px;
     }}
     .table-wrap {{
         overflow-x: auto;
@@ -1060,6 +1162,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>PnL</th>
             <th>PnL %</th>
             <th>Opened</th>
+            <th style="min-width:120px">Progress</th>
         </tr>
     </thead>
     <tbody>
