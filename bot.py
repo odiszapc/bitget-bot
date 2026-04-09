@@ -144,11 +144,19 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     scan_results = []
     symbols = exchange.get_usdt_futures_symbols()
 
+    # Ensure symbols with open positions are always included
+    open_position_symbols = set(state.get("positions", {}).keys())
+
     # Filter by volume using tickers
     logger.info("Fetching tickers for volume filter...")
     try:
         tickers = exchange.get_tickers(symbols[:100])  # Batch fetch
         liquid_symbols = filter_by_volume(tickers, min_volume)
+        # Always include open position symbols even if they fail volume filter
+        for ops in open_position_symbols:
+            if ops not in liquid_symbols:
+                liquid_symbols.append(ops)
+                logger.info(f"Including {ops.split(':')[0]} (open position) despite volume filter")
         logger.info(
             f"Liquidity filter: {len(liquid_symbols)} pairs with >${min_volume/1e6:.0f}M volume"
         )
@@ -166,8 +174,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # ── Step 6: Analyze each symbol ──
     volume_ratios = []
     for symbol in liquid_symbols:
-        if symbol in state["positions"]:
-            continue
+        is_open_position = symbol in open_position_symbols
 
         candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
         df = candles_to_dataframe(candles)
@@ -175,7 +182,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             continue
 
         atr_pct = calculate_atr(df)
-        if atr_pct > max_atr:
+        if atr_pct > max_atr and not is_open_position:
             continue
 
         # Collect volume ratio for market-wide indicator
@@ -272,7 +279,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             logger.error(f"Error generating charts: {e}")
 
     # ── Step 8: Execute trade (only if safe) ──
-    candidates = [s for s in scan_results if s["signal_count"] >= min_signals]
+    candidates = [s for s in scan_results if s["signal_count"] >= min_signals and s["symbol"] not in open_position_symbols]
     outcome = ""
 
     if not all_safe:
