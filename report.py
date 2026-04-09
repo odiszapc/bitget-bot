@@ -51,6 +51,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     tp_roi = cfg.get("min_tp_pct", 0.2) * leverage
     sl_roi = cfg.get("min_stop_pct", 2.0) * leverage
 
+    # Position sizing for display
+    position_size_pct = cfg.get("position_size_pct", 50)
+    max_positions = cfg.get("max_positions", 5)
+    auto_margin_pct = position_size_pct / max_positions  # per-position margin %
+    auto_exposure_pct = auto_margin_pct * leverage       # leveraged exposure %
+    manual_margin_pct = 98
+    manual_exposure_pct = manual_margin_pct * leverage
+
     # Build position rows from exchange data (live), enriched with state data
     position_rows = ""
     total_unrealized = 0.0
@@ -342,6 +350,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-signals">
             <div><small>Classic:</small> {_esc(c_sigs)}</div>
             <div><small>Volume:</small> {_esc(v_sigs)}</div>
+        </div>
+        <div class="modal-bet-info">
+            <span class="label">Manual Bet</span>
+            <span>{manual_margin_pct}% &times; {leverage}x = {manual_exposure_pct:.0f}% of deposit</span>
         </div>
         <div class="modal-actions">
             <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">SHORT &middot; TP +{tp_roi:.1f}% ROI</button>
@@ -722,6 +734,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .modal-signals small {{
         color: #6e7681;
     }}
+    .modal-bet-info {{
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        background: #13171e;
+        border: 1px dashed #30363d;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #c9d1d9;
+    }}
+    .modal-bet-info .label {{
+        font-size: 10px;
+        color: #6e7681;
+        text-transform: uppercase;
+        font-weight: 600;
+    }}
     .modal-actions {{
         margin-bottom: 16px;
     }}
@@ -885,6 +915,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="card card-settings">
         <div class="label">SL (ROI)</div>
         <div class="value negative">-{sl_roi:.1f}%</div>
+    </div>
+    <div class="card card-settings">
+        <div class="label">Auto Bet Size</div>
+        <div class="value neutral">{auto_margin_pct:.0f}% <small style="font-size:12px;color:#6e7681">&times; {leverage}x = {auto_exposure_pct:.0f}%</small></div>
+        <div style="font-size:11px;color:#6e7681;margin-top:4px">{position_size_pct:.0f}% / {max_positions} pos</div>
     </div>
 </div>
 
