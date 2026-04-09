@@ -5,6 +5,7 @@ HTML report generator: creates output/index.html with current bot snapshot.
 import os
 import logging
 from datetime import datetime, timezone
+from positions import build_position_data
 
 logger = logging.getLogger(__name__)
 
@@ -59,133 +60,68 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     manual_margin_pct = 98
     manual_exposure_pct = manual_margin_pct * leverage
 
-    # Build position rows from exchange data (live), enriched with state data
+    # Build position data using shared module
+    pos_data = build_position_data(exchange_positions, state, exchange)
+    open_symbols = {p["symbol"] for p in pos_data}
+    total_unrealized = sum(p["unrealized_pnl"] for p in pos_data)
+
     position_rows = ""
     position_modals = ""
-    total_unrealized = 0.0
-    open_symbols = set()  # track open position symbols for scan table indicator
+    if pos_data:
+        for pidx, p in enumerate(pos_data):
+            pp = p["price_precision"]
 
-    short_positions = [ep for ep in exchange_positions if ep["side"] == "short"]
-    if short_positions:
-        for pidx, ep in enumerate(short_positions):
-            symbol = ep["symbol"]
-            tracked = positions.get(symbol, {})
+            def _fmt_price(v, _pp=pp):
+                return f"{v:.{_pp}f}" if v else "-"
 
-            entry_price = ep.get("entry_price", 0)
-            margin = ep.get("margin", 0)
-            leverage = ep.get("leverage", 0)
-            current_price = ep.get("mark_price", 0) or entry_price
-            unrealized_pnl = ep.get("unrealized_pnl", 0)
-            pnl_pct = ep.get("percentage", 0)
-            liq_price = ep.get("liquidation_price", 0)
-            pp = ep.get("price_precision", 2)
-
-            # TP/SL: exchange position fields, then state, then plan orders
-            tp = ep.get("take_profit", 0) or tracked.get("take_profit", 0)
-            sl = ep.get("stop_loss", 0) or tracked.get("current_sl") or tracked.get("stop_loss", 0)
-            if exchange and (not tp or not sl):
-                try:
-                    tp_sl = exchange.get_tp_sl_for_symbol(symbol)
-                    if not tp and tp_sl["tp"]:
-                        tp = float(tp_sl["tp"])
-                    if not sl and tp_sl["sl"]:
-                        sl = float(tp_sl["sl"])
-                except Exception:
-                    pass
-
-            opened_ts = tracked.get("opened_at", 0)
-            if opened_ts:
-                opened_dt = datetime.fromtimestamp(opened_ts, tz=timezone.utc)
-                ago_sec = (now_dt - opened_dt).total_seconds()
-                if ago_sec < 3600:
-                    ago_str = f"{int(ago_sec // 60)} min ago"
-                elif ago_sec < 86400:
-                    ago_str = f"{int(ago_sec // 3600)} h ago"
-                else:
-                    ago_str = f"{int(ago_sec // 86400)} d ago"
-                opened_str = f"{opened_dt.strftime('%Y-%m-%d %H:%M')} ({ago_str})"
-            else:
-                opened_str = "-"
-
-            total_unrealized += unrealized_pnl
-            pnl_class = "positive" if unrealized_pnl >= 0 else "negative"
-            base, quote = _format_symbol(symbol)
-            open_symbols.add(symbol)
-
-            def _fmt_price(v):
-                return f"{v:.{pp}f}" if v else "-"
-
-            # Progress bar calculation for SHORT positions
-            if current_price <= entry_price and tp and entry_price > 0:
-                # In profit — progress toward TP
-                tp_range = entry_price - tp
-                prog_val = ((entry_price - current_price) / tp_range * 100) if tp_range > 0 else 0
-                prog_val = min(100.0, max(0.0, prog_val))
-                prog_cls = "prog-positive"
-                prog_label_l = "TP"
-                prog_label_r = "Entry"
-            elif liq_price and entry_price > 0:
-                # In loss — progress toward liquidation
-                liq_range = liq_price - entry_price
-                prog_val = ((current_price - entry_price) / liq_range * 100) if liq_range > 0 else 0
-                prog_val = min(100.0, max(0.0, prog_val))
-                prog_cls = "prog-negative"
-                prog_label_l = "Entry"
-                prog_label_r = "Liq"
-            else:
-                prog_val = 0
-                prog_cls = "prog-positive"
-                prog_label_l = ""
-                prog_label_r = ""
-
-            prog_bar_html = f"""<div class="prog-wrap"><div class="prog-labels"><span>{prog_label_l}</span><span>{prog_label_r}</span></div><div class="prog-track"><div class="prog-fill {prog_cls}" style="width:{prog_val:.1f}%"></div><div class="prog-thumb {prog_cls}" style="left:{prog_val:.1f}%"></div></div><div class="prog-pct {prog_cls}">{prog_val:.0f}%</div></div>"""
+            prog_bar_html = f"""<div class="prog-wrap"><div class="prog-labels"><span>{p['prog_label_l']}</span><span>{p['prog_label_r']}</span></div><div class="prog-track"><div class="prog-fill {p['prog_cls']}" style="width:{p['prog_val']:.1f}%"></div><div class="prog-thumb {p['prog_cls']}" style="left:{p['prog_val']:.1f}%"></div></div><div class="prog-pct {p['prog_cls']}">{p['prog_val']:.0f}%</div></div>"""
 
             pos_modal_id = f"pos-modal-{pidx}"
             position_rows += f"""
             <tr class="pos-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'">
-                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></td>
-                <td>{_fmt_price(entry_price)}</td>
-                <td>{_fmt_price(current_price)}</td>
-                <td>{leverage:.0f}x</td>
-                <td>{margin:.2f}</td>
-                <td>{_fmt_price(sl)}</td>
-                <td>{_fmt_price(tp)}</td>
-                <td class="liq-price">{_fmt_price(liq_price)}</td>
-                <td class="{pnl_class}">{unrealized_pnl:+.4f}</td>
-                <td class="{pnl_class}">{pnl_pct:+.2f}%</td>
-                <td>{opened_str}</td>
+                <td class="symbol">{_esc(p['base'])}<span class="quote">/{_esc(p['quote'])}</span></td>
+                <td>{_fmt_price(p['entry_price'])}</td>
+                <td>{_fmt_price(p['current_price'])}</td>
+                <td>{p['leverage']:.0f}x</td>
+                <td>{p['margin']:.2f}</td>
+                <td>{_fmt_price(p['sl'])}</td>
+                <td>{_fmt_price(p['tp'])}</td>
+                <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
+                <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f}</td>
+                <td class="{p['pnl_class']}">{p['pnl_pct']:+.2f}%</td>
+                <td>{p['opened_str']}</td>
                 <td>{prog_bar_html}</td>
             </tr>"""
 
             # Build position modal with charts
             chart_map_ci = cycle_info.get("chart_map", {}) if cycle_info else {}
-            pos_charts = chart_map_ci.get(symbol, {})
+            pos_charts = chart_map_ci.get(p["symbol"], {})
             cache_bust_pos = int(now_dt.timestamp())
             pos_chart_imgs = ""
             for tf_label, tf_key in [("1 min", "1m"), ("15 min", "15m"), ("1 hour", "1h")]:
                 src = pos_charts.get(tf_key, "")
                 if src:
-                    pos_chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}?t={cache_bust_pos}" alt="{_esc(base)} {tf_label}"></div>\n'
+                    pos_chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}?t={cache_bust_pos}" alt="{_esc(p["base"])} {tf_label}"></div>\n'
 
             position_modals += f"""
 <div class="modal-overlay" id="{pos_modal_id}" onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-content">
         <div class="modal-header">
-            <span class="modal-symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span></span>
+            <span class="modal-symbol">{_esc(p['base'])}<span class="quote">/{_esc(p['quote'])}</span></span>
             <span class="modal-close" onclick="this.closest('.modal-overlay').style.display='none'">&times;</span>
         </div>
         <div class="modal-stats">
-            <div class="modal-stat"><span class="label">Entry</span><span>{_fmt_price(entry_price)}</span></div>
-            <div class="modal-stat"><span class="label">Current</span><span>{_fmt_price(current_price)}</span></div>
-            <div class="modal-stat"><span class="label">Leverage</span><span>{leverage:.0f}x</span></div>
-            <div class="modal-stat"><span class="label">Margin</span><span>{margin:.2f}</span></div>
-            <div class="modal-stat"><span class="label">PnL</span><span class="{pnl_class}">{unrealized_pnl:+.4f} ({pnl_pct:+.2f}%)</span></div>
+            <div class="modal-stat"><span class="label">Entry</span><span>{_fmt_price(p['entry_price'])}</span></div>
+            <div class="modal-stat"><span class="label">Current</span><span>{_fmt_price(p['current_price'])}</span></div>
+            <div class="modal-stat"><span class="label">Leverage</span><span>{p['leverage']:.0f}x</span></div>
+            <div class="modal-stat"><span class="label">Margin</span><span>{p['margin']:.2f}</span></div>
+            <div class="modal-stat"><span class="label">PnL</span><span class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} ({p['pnl_pct']:+.2f}%)</span></div>
         </div>
         <div class="modal-stats">
-            <div class="modal-stat"><span class="label">SL</span><span>{_fmt_price(sl)}</span></div>
-            <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(tp)}</span></div>
-            <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(liq_price)}</span></div>
-            <div class="modal-stat"><span class="label">Opened</span><span>{opened_str}</span></div>
+            <div class="modal-stat"><span class="label">SL</span><span>{_fmt_price(p['sl'])}</span></div>
+            <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(p['tp'])}</span></div>
+            <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(p['liq_price'])}</span></div>
+            <div class="modal-stat"><span class="label">Opened</span><span>{p['opened_str']}</span></div>
         </div>
         <div class="modal-progress">{prog_bar_html}</div>
         <div class="modal-charts">
@@ -632,6 +568,36 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .modal-progress .prog-pct {{
         font-size: 14px;
+    }}
+    .section-header {{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }}
+    .section-header h2 {{
+        margin-bottom: 0;
+    }}
+    .refresh-btn {{
+        background: none;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 5px 7px;
+        cursor: pointer;
+        color: #6e7681;
+        display: flex;
+        align-items: center;
+        transition: color 0.15s, border-color 0.15s;
+    }}
+    .refresh-btn:hover {{
+        color: #58a6ff;
+        border-color: #58a6ff;
+    }}
+    .refresh-icon {{
+        transition: transform 0.3s;
+    }}
+    .refresh-icon.spinning {{
+        animation: spin 0.8s linear infinite;
     }}
     .table-wrap {{
         overflow-x: auto;
@@ -1146,9 +1112,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>
 
-<h2>Open Positions ({len(short_positions)})</h2>
+<div class="section-header">
+    <h2>Open Positions (<span id="pos-count">{len(pos_data)}</span>)</h2>
+    <button class="refresh-btn" id="refresh-positions" onclick="refreshPositions()" title="Refresh positions">
+        <svg class="refresh-icon" id="refresh-icon" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path fill="currentColor" d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+    </button>
+</div>
 <div class="table-wrap">
-<table>
+<table id="positions-table">
     <thead>
         <tr>
             <th>Symbol</th>
@@ -1165,7 +1136,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th style="min-width:120px">Progress</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="positions-body">
         {position_rows}
     </tbody>
 </table>
@@ -1315,6 +1286,68 @@ function doShort(symbol, btn) {{
         }});
     }});
 }})();
+
+// Refresh positions table
+function refreshPositions() {{
+    var icon = document.getElementById("refresh-icon");
+    icon.classList.add("spinning");
+
+    var apiUrl = window.location.protocol + "//" + window.location.hostname + ":8432/api/positions";
+    fetch(apiUrl)
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+        icon.classList.remove("spinning");
+        if (!data.ok) return;
+
+        var tbody = document.getElementById("positions-body");
+        var countEl = document.getElementById("pos-count");
+        var positions = data.positions;
+        countEl.textContent = positions.length;
+
+        if (positions.length === 0) {{
+            tbody.innerHTML = '<tr><td colspan="12" class="empty">No open positions</td></tr>';
+            return;
+        }}
+
+        var html = "";
+        for (var i = 0; i < positions.length; i++) {{
+            var p = positions[i];
+            var pp = p.price_precision || 2;
+            var pnlCls = p.pnl_class || "neutral";
+
+            function fmtP(v) {{
+                return v ? v.toFixed(pp) : "-";
+            }}
+
+            // Progress bar
+            var progHtml = '<div class="prog-wrap">' +
+                '<div class="prog-labels"><span>' + (p.prog_label_l || "") + '</span><span>' + (p.prog_label_r || "") + '</span></div>' +
+                '<div class="prog-track"><div class="prog-fill ' + p.prog_cls + '" style="width:' + p.prog_val + '%"></div>' +
+                '<div class="prog-thumb ' + p.prog_cls + '" style="left:' + p.prog_val + '%"></div></div>' +
+                '<div class="prog-pct ' + p.prog_cls + '">' + Math.round(p.prog_val) + '%</div></div>';
+
+            html += '<tr class="pos-row">' +
+                '<td class="symbol">' + p.base + '<span class="quote">/' + p.quote + '</span></td>' +
+                '<td>' + fmtP(p.entry_price) + '</td>' +
+                '<td>' + fmtP(p.current_price) + '</td>' +
+                '<td>' + p.leverage.toFixed(0) + 'x</td>' +
+                '<td>' + p.margin.toFixed(2) + '</td>' +
+                '<td>' + fmtP(p.sl) + '</td>' +
+                '<td>' + fmtP(p.tp) + '</td>' +
+                '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
+                '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + '</td>' +
+                '<td class="' + pnlCls + '">' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%</td>' +
+                '<td>' + p.opened_str + '</td>' +
+                '<td>' + progHtml + '</td>' +
+                '</tr>';
+        }}
+        tbody.innerHTML = html;
+    }})
+    .catch(function(e) {{
+        icon.classList.remove("spinning");
+        console.error("Refresh error:", e);
+    }});
+}}
 </script>
 
 </body>

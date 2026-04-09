@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify
 from exchange import Exchange
 from strategy import candles_to_dataframe, calculate_atr, calculate_sl_tp
 from state import load_state, add_position
+from positions import build_position_data
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,11 +116,35 @@ def api_short():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/positions", methods=["GET"])
+def api_positions():
+    """Return open positions as JSON for real-time table refresh."""
+    try:
+        config = load_config()
+        exchange = Exchange(config)
+        exchange.load_markets()
+
+        exchange_positions = exchange.get_open_positions()
+        state = load_state()
+        pos_data = build_position_data(exchange_positions, state, exchange)
+
+        balance = exchange.get_balance()
+
+        return jsonify({
+            "ok": True,
+            "positions": pos_data,
+            "balance": balance,
+        })
+    except Exception as e:
+        logger.exception(f"Error in /api/positions: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
 
