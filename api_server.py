@@ -184,6 +184,23 @@ def api_positions():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/downtrend", methods=["GET"])
+def api_downtrend():
+    """Generate downtrend score report and redirect to it."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python", "test_downtrend.py"],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            return jsonify({"ok": False, "error": result.stderr}), 500
+        return jsonify({"ok": True, "path": "/downtrend_test.html"})
+    except Exception as e:
+        logger.exception(f"Error in /api/downtrend: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"

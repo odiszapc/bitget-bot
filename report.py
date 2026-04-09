@@ -1191,7 +1191,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 {scan_section}
 
-<div class="footer">Bitget Short Bot</div>
+<div class="footer">Bitget Short Bot &middot; <a href="#" onclick="genDowntrend(this);return false" style="color:#58a6ff;text-decoration:none">Generate Downtrend Report</a></div>
 
 <div class="preview-panel" id="preview-panel">
     <div class="preview-symbol" id="preview-symbol"></div>
@@ -1448,6 +1448,25 @@ function refreshShorts() {{
     .catch(function(e) {{
         icon.classList.remove("spinning");
         console.error("Shorts refresh error:", e);
+    }});
+}}
+
+// Generate downtrend report
+function genDowntrend(link) {{
+    link.textContent = "Generating...";
+    var apiUrl = window.location.protocol + "//" + window.location.hostname + ":8432/api/downtrend";
+    fetch(apiUrl)
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+        if (data.ok) {{
+            link.textContent = "Generate Downtrend Report";
+            window.open(data.path, "_blank");
+        }} else {{
+            link.textContent = "Error: " + (data.error || "unknown");
+        }}
+    }})
+    .catch(function(e) {{
+        link.textContent = "Error: " + e.message;
     }});
 }}
 </script>
