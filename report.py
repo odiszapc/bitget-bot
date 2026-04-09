@@ -315,6 +315,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             else:
                 score_cls = "muted"
 
+            # Volume 24h
+            vol_24h = sr.get("volume_24h", 0)
+            if vol_24h >= 1_000_000_000:
+                vol_str = f"{vol_24h / 1_000_000_000:.1f}B"
+            elif vol_24h >= 1_000_000:
+                vol_str = f"{vol_24h / 1_000_000:.1f}M"
+            elif vol_24h >= 1_000:
+                vol_str = f"{vol_24h / 1_000:.0f}K"
+            else:
+                vol_str = f"{vol_24h:.0f}"
+            vol_cls = "" if vol_24h >= 5_000_000 else ("warning" if vol_24h >= 1_000_000 else "muted")
+
             # Component bars (normalized 0-100)
             n_adx = sr.get("n_adx", 0)
             n_slope = sr.get("n_slope", 0)
@@ -356,6 +368,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
+                <td class="{vol_cls}">{vol_str}</td>
                 <td class="comp-bars">{comp_bars}</td>
             </tr>"""
 
@@ -457,6 +470,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
+            <th>Vol 24h</th>
             <th style="min-width:120px">Components</th>
         </tr>
     </thead>

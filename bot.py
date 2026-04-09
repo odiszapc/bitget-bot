@@ -148,19 +148,17 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # Ensure symbols with open positions are always included
     open_position_symbols = set(state.get("positions", {}).keys())
 
-    # Filter by volume using tickers
-    logger.info("Fetching tickers for volume filter...")
+    # Fetch all tickers for volume data
+    logger.info("Fetching tickers...")
     try:
         tickers = exchange.get_tickers(symbols)  # Fetch all at once
-        liquid_symbols = filter_by_volume(tickers, min_volume)
-        # Always include open position symbols even if they fail volume filter
+        # No volume filter — all pairs go through, volume shown in report
+        liquid_symbols = list(tickers.keys())
+        # Ensure open position symbols are included
         for ops in open_position_symbols:
             if ops not in liquid_symbols:
                 liquid_symbols.append(ops)
-                logger.info(f"Including {ops.split(':')[0]} (open position) despite volume filter")
-        logger.info(
-            f"Liquidity filter: {len(liquid_symbols)} pairs with >${min_volume/1e6:.0f}M volume"
-        )
+        logger.info(f"Total pairs for analysis: {len(liquid_symbols)}")
     except Exception as e:
         logger.error(f"Error fetching tickers: {e}")
         logger.info(get_stats(state))
@@ -197,6 +195,10 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         all_analysis = analyze_all_strategies(df, funding_rate, config)
         active = all_analysis[active_strategy]
 
+        # Get 24h volume from tickers
+        ticker_data = tickers.get(symbol, {})
+        quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)
+
         # Flatten composite components to top level for normalization
         comp = all_analysis.get("composite", {})
         scan_results.append({
@@ -204,6 +206,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             "rsi": active["rsi"],
             "atr_pct": atr_pct,
             "funding_rate": funding_rate or 0,
+            "volume_24h": quote_volume,
             "signal_count": active["signal_count"],
             "signals": active["signals"],
             "details": active["details"],
