@@ -224,7 +224,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             bal_str = f"{running_balance:.2f}"
             delta_str = f"{pnl:+.2f}"
             delta_cls = "positive" if pnl >= 0 else "negative"
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time close-tag-open">Open</span></div>\n'
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_str"]}</span></div>\n'
 
         # Closed shorts
         for i, rc in enumerate(recent_closes):
@@ -704,14 +704,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .close-row:last-child {{
         border-bottom: none;
     }}
-    .close-open {{
-        background: rgba(88, 166, 255, 0.06);
-        border-left: 2px solid #58a6ff;
-        padding-left: 6px;
-    }}
-    .close-tag-open {{
-        color: #58a6ff !important;
-        font-weight: 600;
+    .close-open .close-sym {{
+        color: #58a6ff;
     }}
     .close-sym {{
         width: 70px;
@@ -1416,7 +1410,7 @@ function refreshShorts() {{
             running += p.unrealized_pnl;
             var cls = p.unrealized_pnl >= 0 ? "positive" : "negative";
             var delta = (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(2);
-            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal">' + running.toFixed(2) + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time close-tag-open">Open</span></div>';
+            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal">' + running.toFixed(2) + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + p.opened_str + '</span></div>';
         }}
 
         // Closed shorts
