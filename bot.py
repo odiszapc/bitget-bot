@@ -151,7 +151,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # Filter by volume using tickers
     logger.info("Fetching tickers for volume filter...")
     try:
-        tickers = exchange.get_tickers(symbols[:100])  # Batch fetch
+        tickers = exchange.get_tickers(symbols)  # Fetch all at once
         liquid_symbols = filter_by_volume(tickers, min_volume)
         # Always include open position symbols even if they fail volume filter
         for ops in open_position_symbols:
