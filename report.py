@@ -214,17 +214,22 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         now_utc = datetime.now(timezone.utc)
         shorts_rows = ""
 
-        # Open positions first (sorted oldest → newest)
-        open_sorted = sorted(pos_data, key=lambda p: p.get("opened_str", ""))
-        running_balance = current_balance
+        # Open positions first (sorted newest → oldest)
+        open_sorted = sorted(pos_data, key=lambda p: p.get("opened_ts", 0), reverse=True)
+        # Calculate running balance: accumulate from oldest to newest, then display newest first
+        open_by_oldest = sorted(pos_data, key=lambda p: p.get("opened_ts", 0))
+        running = current_balance
+        bal_map = {}
+        for op in open_by_oldest:
+            running += op["unrealized_pnl"]
+            bal_map[op["symbol"]] = running
         for op in open_sorted:
             sym = _esc(op["base"])
             pnl = op["unrealized_pnl"]
-            running_balance += pnl
-            bal_str = f"{running_balance:.2f}"
+            bal_str = f"{bal_map.get(op['symbol'], current_balance):.2f}"
             delta_str = f"{pnl:+.2f}"
             delta_cls = "positive" if pnl >= 0 else "negative"
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_str"]}</span></div>\n'
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal close-bal-open">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
         # Closed shorts
         for i, rc in enumerate(recent_closes):
@@ -706,6 +711,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .close-open .close-sym {{
         color: #58a6ff;
+    }}
+    .close-bal-open {{
+        color: #d29922 !important;
     }}
     .close-sym {{
         width: 70px;
@@ -1403,14 +1411,22 @@ function refreshShorts() {{
         var balance = data.balance || 0;
         var html = "";
 
-        // Open positions first
-        var running = balance;
-        for (var i = 0; i < positions.length; i++) {{
-            var p = positions[i];
-            running += p.unrealized_pnl;
+        // Open positions: sort newest first, calculate running balance from oldest
+        var sorted = positions.slice().sort(function(a,b) {{ return (a.opened_ts||0) - (b.opened_ts||0); }});
+        var runBal = balance;
+        var balMap = {{}};
+        for (var k = 0; k < sorted.length; k++) {{
+            runBal += sorted[k].unrealized_pnl;
+            balMap[sorted[k].symbol] = runBal;
+        }}
+        // Display newest first
+        var newest = positions.slice().sort(function(a,b) {{ return (b.opened_ts||0) - (a.opened_ts||0); }});
+        for (var i = 0; i < newest.length; i++) {{
+            var p = newest[i];
+            var bVal = (balMap[p.symbol] || balance).toFixed(2);
             var cls = p.unrealized_pnl >= 0 ? "positive" : "negative";
             var delta = (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(2);
-            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal">' + running.toFixed(2) + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + p.opened_str + '</span></div>';
+            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal close-bal-open">' + bVal + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
         }}
 
         // Closed shorts

@@ -51,6 +51,7 @@ def build_position_data(
         # Opened time
         opened_ts = tracked.get("opened_at", 0)
         opened_str = "-"
+        opened_short_str = "-"
         if opened_ts:
             opened_dt = datetime.fromtimestamp(opened_ts, tz=timezone.utc)
             ago_sec = (now_dt - opened_dt).total_seconds()
@@ -61,6 +62,7 @@ def build_position_data(
             else:
                 ago_str = f"{int(ago_sec // 86400)} d ago"
             opened_str = f"{opened_dt.strftime('%Y-%m-%d %H:%M')} ({ago_str})"
+            opened_short_str = f"{opened_dt.strftime('%b-%d %H:%M')} ({ago_str})"
 
         # Progress bar data for SHORT positions
         if current_price <= entry_price and tp and entry_price > 0:
@@ -103,6 +105,8 @@ def build_position_data(
             "unrealized_pnl": unrealized_pnl,
             "pnl_pct": pnl_pct,
             "opened_str": opened_str,
+            "opened_short_str": opened_short_str,
+            "opened_ts": opened_ts,
             "price_precision": pp,
             "pnl_class": "positive" if unrealized_pnl >= 0 else "negative",
             "prog_val": round(prog_val, 1),
