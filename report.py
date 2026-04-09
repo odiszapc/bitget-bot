@@ -284,24 +284,36 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         scan_rows = ""
         modals = ""
         for idx, sr in enumerate(sr_list):
-            sc = sr["signal_count"]
-            if sc >= 3:
-                count_class = "positive"
-                row_class = "best-candidate" if idx == 0 else "scan-hot"
-            elif sc == 2:
-                count_class = "warning"
-                row_class = ""
-            elif sc == 1:
-                count_class = "neutral"
-                row_class = ""
+            dt_val = sr.get("downtrend_score", 0)
+            if act_strat == "composite":
+                if dt_val >= 70:
+                    row_class = "best-candidate" if idx == 0 else "scan-hot"
+                elif dt_val >= 40:
+                    row_class = ""
+                else:
+                    row_class = "scan-dim"
             else:
-                count_class = "muted"
-                row_class = "scan-dim"
+                sc = sr["signal_count"]
+                if sc >= 3:
+                    row_class = "best-candidate" if idx == 0 else "scan-hot"
+                elif sc >= 1:
+                    row_class = ""
+                else:
+                    row_class = "scan-dim"
 
             base, quote = _format_symbol(sr["symbol"])
             fr = sr.get("funding_rate", 0)
 
             rsi_class = "positive" if sr["rsi"] > 70 else ("warning" if sr["rsi"] > 60 else "")
+
+            # Composite downtrend score
+            dt_score = sr.get("downtrend_score", 0)
+            if dt_score >= 70:
+                score_cls = "positive"
+            elif dt_score >= 40:
+                score_cls = "warning"
+            else:
+                score_cls = "muted"
 
             # Build strategy columns
             def _strat_cell(name):
@@ -334,6 +346,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
+                <td class="{score_cls}"><b>{dt_score:.0f}</b></td>
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
@@ -364,6 +377,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <span class="modal-close" onclick="this.closest('.modal-overlay').style.display='none'">&times;</span>
         </div>
         <div class="modal-stats">
+            <div class="modal-stat"><span class="label">Score</span><span class="{score_cls}"><b>{dt_score:.0f}</b></span></div>
             <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
             <div class="modal-stat"><span class="label">ATR</span><span>{sr['atr_pct']:.1f}%</span></div>
             <div class="modal-stat"><span class="label">Funding</span><span>{fr*100:.4f}%</span></div>
@@ -421,6 +435,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <thead>
         <tr>
             <th>Symbol</th>
+            <th{"" if act_strat != "composite" else ' class="strategy-active"'}>Score</th>
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
@@ -1191,7 +1206,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 {scan_section}
 
-<div class="footer">Bitget Short Bot &middot; <a href="#" onclick="genDowntrend(this);return false" style="color:#58a6ff;text-decoration:none">Generate Downtrend Report</a></div>
+<div class="footer">Bitget Short Bot</div>
 
 <div class="preview-panel" id="preview-panel">
     <div class="preview-symbol" id="preview-symbol"></div>
@@ -1451,24 +1466,6 @@ function refreshShorts() {{
     }});
 }}
 
-// Generate downtrend report
-function genDowntrend(link) {{
-    link.textContent = "Generating...";
-    var apiUrl = window.location.protocol + "//" + window.location.hostname + ":8432/api/downtrend";
-    fetch(apiUrl)
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-        if (data.ok) {{
-            link.textContent = "Generate Downtrend Report";
-            window.open(data.path, "_blank");
-        }} else {{
-            link.textContent = "Error: " + (data.error || "unknown");
-        }}
-    }})
-    .catch(function(e) {{
-        link.textContent = "Error: " + e.message;
-    }});
-}}
 </script>
 
 </body>

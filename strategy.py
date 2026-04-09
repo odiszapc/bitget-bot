@@ -2,6 +2,7 @@
 Strategy module: technical indicators, filtering, and signal generation.
 """
 
+import numpy as np
 import pandas as pd
 import ta
 import logging
@@ -175,9 +176,110 @@ def analyze_volume(
     return result
 
 
+def _adx_directional(df: pd.DataFrame, period: int = 14) -> tuple[float, float, float, float]:
+    """Returns (directional_score, adx, di_plus, di_minus)."""
+    adx_ind = ta.trend.ADXIndicator(
+        high=df["high"], low=df["low"], close=df["close"], window=period
+    )
+    adx = adx_ind.adx().iloc[-1]
+    di_plus = adx_ind.adx_pos().iloc[-1]
+    di_minus = adx_ind.adx_neg().iloc[-1]
+    return (di_minus - di_plus) * (adx / 100), adx, di_plus, di_minus
+
+
+def _slope_pct(df: pd.DataFrame, period: int = 14) -> float:
+    """Linear regression slope of close prices as %/candle."""
+    closes = df["close"].iloc[-period:].values
+    x = np.arange(len(closes))
+    slope = np.polyfit(x, closes, 1)[0]
+    avg = closes.mean()
+    return (slope / avg) * 100 if avg != 0 else 0.0
+
+
+def _roc_weighted(df: pd.DataFrame) -> float:
+    """Weighted ROC: 5-period*0.4 + 14-period*0.35 + 30-period*0.25."""
+    close = df["close"]
+    def roc(n):
+        if len(close) < n + 1:
+            return 0.0
+        return (close.iloc[-1] - close.iloc[-n - 1]) / close.iloc[-n - 1] * 100
+    return roc(5) * 0.4 + roc(14) * 0.35 + roc(30) * 0.25
+
+
+def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
+    """(EMA_slow - EMA_fast) / price * 100. Positive = bearish spread."""
+    ema_f = ta.trend.EMAIndicator(close=df["close"], window=fast).ema_indicator().iloc[-1]
+    ema_s = ta.trend.EMAIndicator(close=df["close"], window=slow).ema_indicator().iloc[-1]
+    price = df["close"].iloc[-1]
+    return (ema_s - ema_f) / price * 100 if price != 0 else 0.0
+
+
+def calculate_downtrend_components(df: pd.DataFrame) -> dict:
+    """Calculate raw downtrend components for a single symbol."""
+    adx_dir, adx, di_plus, di_minus = _adx_directional(df)
+    slope = _slope_pct(df)
+    roc_w = _roc_weighted(df)
+    ema_g = _ema_gap(df)
+    return {
+        "adx_dir": adx_dir, "adx": adx, "di_plus": di_plus, "di_minus": di_minus,
+        "slope": slope, "roc_w": roc_w, "ema_gap": ema_g,
+    }
+
+
+def normalize_downtrend_scores(scan_results: list[dict]) -> None:
+    """
+    Normalize raw components across all scan results and compute composite score.
+    Mutates scan_results in place, adding 'downtrend_score' field.
+    """
+    if not scan_results:
+        return
+
+    def _norm(values):
+        arr = np.array(values, dtype=float)
+        mn, mx = arr.min(), arr.max()
+        if mx == mn:
+            return [50.0] * len(values)
+        return ((arr - mn) / (mx - mn) * 100).tolist()
+
+    # Higher = more bearish for all components
+    n_adx = _norm([r.get("adx_dir", 0) for r in scan_results])
+    n_slope = _norm([-r.get("slope", 0) for r in scan_results])
+    n_roc = _norm([-r.get("roc_w", 0) for r in scan_results])
+    n_ema = _norm([r.get("ema_gap", 0) for r in scan_results])
+
+    for i, r in enumerate(scan_results):
+        r["downtrend_score"] = round(
+            0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i], 1
+        )
+
+
+def analyze_composite(
+    df: pd.DataFrame, funding_rate: float | None, config: dict
+) -> dict:
+    """
+    Composite downtrend strategy.
+    Entry criteria: downtrend_score >= 70 (set after normalization in bot.py).
+    Raw components stored for normalization across all symbols.
+    """
+    result = {"signals": [], "signal_count": 0, "max_signals": 100,
+              "rsi": 0.0, "atr_pct": 0.0, "details": []}
+
+    rsi = calculate_rsi(df)
+    result["rsi"] = rsi
+    result["atr_pct"] = calculate_atr(df)
+
+    # Store raw components — score computed after normalization
+    components = calculate_downtrend_components(df)
+    result.update(components)
+    result["downtrend_score"] = 0  # placeholder, set by normalize_downtrend_scores
+
+    return result
+
+
 STRATEGIES = {
     "classic": analyze_classic,
     "volume": analyze_volume,
+    "composite": analyze_composite,
 }
 
 

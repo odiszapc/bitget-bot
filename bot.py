@@ -21,6 +21,7 @@ from strategy import (
     candles_to_dataframe,
     calculate_atr,
     analyze_all_strategies,
+    normalize_downtrend_scores,
     STRATEGIES,
     calculate_sl_tp,
     filter_by_volume,
@@ -209,8 +210,20 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
         time.sleep(0.1)
 
-    # ── Step 7: Sort and log scan results ──
-    scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
+    # ── Step 7: Normalize composite scores and sort ──
+    normalize_downtrend_scores(scan_results)
+    # Propagate composite score to top-level for unified access
+    for sr in scan_results:
+        comp = sr.get("composite", {})
+        if comp:
+            comp["downtrend_score"] = sr.get("downtrend_score", 0)
+            comp["signal_count"] = sr.get("downtrend_score", 0)  # score IS the signal strength
+        sr["downtrend_score"] = sr.get("downtrend_score", 0)
+
+    if active_strategy == "composite":
+        scan_results.sort(key=lambda c: c.get("downtrend_score", 0), reverse=True)
+    else:
+        scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
     scan_results = scan_results[:20]  # Top 20
 
     logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
@@ -279,7 +292,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             logger.error(f"Error generating charts: {e}")
 
     # ── Step 8: Execute trade (only if safe) ──
-    candidates = [s for s in scan_results if s["signal_count"] >= min_signals and s["symbol"] not in open_position_symbols]
+    min_score = config.get("min_downtrend_score", 70)
+    if active_strategy == "composite":
+        candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]
+    else:
+        candidates = [s for s in scan_results if s["signal_count"] >= min_signals and s["symbol"] not in open_position_symbols]
     outcome = ""
 
     if not all_safe:
