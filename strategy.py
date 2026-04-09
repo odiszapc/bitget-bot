@@ -248,6 +248,10 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
     n_ema = _norm([r.get("ema_gap", 0) for r in scan_results])
 
     for i, r in enumerate(scan_results):
+        r["n_adx"] = round(n_adx[i], 1)
+        r["n_slope"] = round(n_slope[i], 1)
+        r["n_roc"] = round(n_roc[i], 1)
+        r["n_ema"] = round(n_ema[i], 1)
         r["downtrend_score"] = round(
             0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i], 1
         )

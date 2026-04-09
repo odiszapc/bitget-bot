@@ -229,7 +229,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             bal_str = f"{bal_map.get(op['symbol'], current_balance):.2f}"
             delta_str = f"{pnl:+.2f}"
             delta_cls = "positive" if pnl >= 0 else "negative"
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym}</span><span class="close-bal close-bal-open">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-bal close-bal-open">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
         # Closed shorts
         for i, rc in enumerate(recent_closes):
@@ -315,24 +315,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             else:
                 score_cls = "muted"
 
-            # Build strategy columns
-            def _strat_cell(name):
-                s = sr.get(name, {})
-                cnt = s.get("signal_count", 0)
-                mx = s.get("max_signals", 4)
-                sigs = ", ".join(s.get("signals", []))
-                if cnt >= 3:
-                    cls = "positive"
-                elif cnt == 2:
-                    cls = "warning"
-                elif cnt == 1:
-                    cls = "neutral"
-                else:
-                    cls = "muted"
-                return f'<td class="{cls}">{cnt}/{mx} <small>{_esc(sigs)}</small></td>'
-
-            classic_cell = _strat_cell("classic")
-            volume_cell = _strat_cell("volume")
+            # Component bars (normalized 0-100)
+            n_adx = sr.get("n_adx", 0)
+            n_slope = sr.get("n_slope", 0)
+            n_roc = sr.get("n_roc", 0)
+            n_ema = sr.get("n_ema", 0)
+            comp_bars = (
+                f'<span class="cbar cbar-blue" style="width:{n_adx:.0f}px" title="ADX {n_adx:.0f}"></span>'
+                f'<span class="cbar cbar-green" style="width:{n_slope:.0f}px" title="Slope {n_slope:.0f}"></span>'
+                f'<span class="cbar cbar-red" style="width:{n_roc:.0f}px" title="ROC {n_roc:.0f}"></span>'
+                f'<span class="cbar cbar-cyan" style="width:{n_ema:.0f}px" title="EMA {n_ema:.0f}"></span>'
+            )
 
             modal_id = f"modal-{idx}"
             # Chart URLs for preview panel (data attributes)
@@ -363,8 +356,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td>{sr['atr_pct']:.1f}%</td>
                 <td>{fr*100:.4f}%</td>
-                {classic_cell}
-                {volume_cell}
+                <td class="comp-bars">{comp_bars}</td>
             </tr>"""
 
             # Build modal for this symbol
@@ -465,8 +457,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>RSI</th>
             <th>ATR</th>
             <th>Funding</th>
-            <th{"" if act_strat != "classic" else ' class="strategy-active"'}>Classic</th>
-            <th{"" if act_strat != "volume" else ' class="strategy-active"'}>Volume</th>
+            <th style="min-width:120px">Components</th>
         </tr>
     </thead>
     <tbody>
@@ -558,6 +549,22 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .scan-dim td.symbol {{
         color: #6e7681;
     }}
+    .comp-bars {{
+        white-space: nowrap;
+    }}
+    .cbar {{
+        display: inline-block;
+        height: 8px;
+        border-radius: 3px;
+        vertical-align: middle;
+        margin-right: 2px;
+        min-width: 1px;
+    }}
+    .cbar-blue {{ background: linear-gradient(90deg, #1f6feb, #58a6ff); }}
+    .cbar-green {{ background: linear-gradient(90deg, #238636, #3fb950); }}
+    .cbar-red {{ background: linear-gradient(90deg, #da3633, #f85149); }}
+    .cbar-cyan {{ background: linear-gradient(90deg, #1b7c83, #3bc9d1); }}
+    .neg {{ color: #f85149; }}
     h2 {{
         font-size: 15px;
         color: #8b949e;
@@ -1467,7 +1474,7 @@ function refreshShorts() {{
             var bVal = (balMap[p.symbol] || balance).toFixed(2);
             var cls = p.unrealized_pnl >= 0 ? "positive" : "negative";
             var delta = (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(2);
-            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + '</span><span class="close-bal close-bal-open">' + bVal + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
+            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + ' <span class="pos-dot"></span></span><span class="close-bal close-bal-open">' + bVal + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
         }}
 
         // Closed shorts
