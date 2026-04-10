@@ -1127,6 +1127,55 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     @keyframes spin {{
         to {{ transform: rotate(360deg); }}
     }}
+    /* Toast notification */
+    .toast-container {{
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+    }}
+    .toast {{
+        background: #1c2128;
+        border: 1px solid #238636;
+        border-left: 4px solid #3fb950;
+        border-radius: 8px;
+        padding: 14px 20px;
+        color: #c9d1d9;
+        font-family: inherit;
+        font-size: 13px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        pointer-events: auto;
+        transform: translateX(120%);
+        animation: toast-in 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) forwards;
+    }}
+    .toast.toast-out {{
+        animation: toast-out 0.3s ease-in forwards;
+    }}
+    .toast-title {{
+        font-weight: 700;
+        color: #3fb950;
+        margin-bottom: 4px;
+        font-size: 14px;
+    }}
+    .toast-body {{
+        color: #8b949e;
+        line-height: 1.5;
+    }}
+    .toast-body b {{
+        color: #c9d1d9;
+    }}
+    @keyframes toast-in {{
+        from {{ transform: translateX(120%); opacity: 0; }}
+        to {{ transform: translateX(0); opacity: 1; }}
+    }}
+    @keyframes toast-out {{
+        from {{ transform: translateX(0); opacity: 1; }}
+        to {{ transform: translateX(120%); opacity: 0; }}
+    }}
     .preview-empty {{
         font-size: 12px;
         color: #6e7681;
@@ -1293,9 +1342,14 @@ function doShort(symbol, btn) {{
     .then(function(data) {{
         btn.classList.remove("loading");
         if (data.ok) {{
-            // Close the modal, refresh positions and shorts
             var overlay = btn.closest(".modal-overlay");
             if (overlay) overlay.style.display = "none";
+            var o = data.order;
+            var sym = o.symbol || symbol.split(":")[0];
+            showToast(
+                "SHORT opened",
+                "<b>" + sym + "</b> &mdash; Margin: " + o.margin + " USDT &middot; TP: " + o.take_profit
+            );
             refreshPositions();
             refreshShorts();
         }} else {{
@@ -1469,6 +1523,23 @@ function refreshShorts() {{
     }});
 }}
 
+// Toast notifications
+var _toastContainer;
+function showToast(title, body, duration) {{
+    if (!_toastContainer) {{
+        _toastContainer = document.createElement("div");
+        _toastContainer.className = "toast-container";
+        document.body.appendChild(_toastContainer);
+    }}
+    var toast = document.createElement("div");
+    toast.className = "toast";
+    toast.innerHTML = '<div class="toast-title">' + title + '</div><div class="toast-body">' + body + '</div>';
+    _toastContainer.appendChild(toast);
+    setTimeout(function() {{
+        toast.classList.add("toast-out");
+        setTimeout(function() {{ toast.remove(); }}, 300);
+    }}, duration || 4000);
+}}
 </script>
 
 </body>
