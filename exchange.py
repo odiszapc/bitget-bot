@@ -405,8 +405,17 @@ class Exchange:
                 },
             )
 
-            # Get actual fill price from order response
-            fill_price = float(order.get("average", 0) or order.get("price", 0) or current_price)
+            # Get actual fill price — Bitget market orders return None for price/average
+            # Fetch the completed order to get priceAvg
+            fill_price = float(order.get("average", 0) or order.get("price", 0) or 0)
+            if not fill_price:
+                try:
+                    filled_order = self._api_call("fetch_order", order["id"], symbol)
+                    fill_price = float(filled_order.get("average", 0) or filled_order.get("price", 0) or current_price)
+                    logger.info(f"Fill price from fetch_order: {fill_price}")
+                except Exception:
+                    fill_price = current_price
+                    logger.warning(f"Could not fetch fill price, using ticker: {fill_price}")
 
             return {
                 "order_id": order["id"],
@@ -425,25 +434,24 @@ class Exchange:
             return None
 
     def set_take_profit(self, symbol: str, tp_price: float, amount: float) -> bool:
-        """Set TP on an existing position via plan order."""
+        """Set TP on an existing position via PlaceTpslOrder."""
         try:
             tp_price = float(self.exchange.price_to_precision(symbol, tp_price))
             amount = float(self.exchange.amount_to_precision(symbol, amount))
+            raw_symbol = symbol.replace("/USDT:USDT", "USDT")
 
-            self._api_call("create_order",
-                symbol=symbol,
-                type="market",
-                side="buy",
-                amount=amount,
-                params={
-                    "tradeSide": "close",
-                    "triggerPrice": str(tp_price),
-                    "triggerType": "mark_price",
-                    "orderType": "market",
-                    "planType": "profit_plan",
-                },
-            )
-            logger.info(f"TP set for {symbol}: {tp_price}")
+            self.api_call_count += 1
+            result = self.exchange.privateMixPostV2MixOrderPlaceTpslOrder({
+                'productType': 'USDT-FUTURES',
+                'symbol': raw_symbol,
+                'marginCoin': 'USDT',
+                'planType': 'profit_plan',
+                'triggerPrice': str(tp_price),
+                'triggerType': 'mark_price',
+                'size': str(amount),
+                'holdSide': 'short',
+            })
+            logger.info(f"TP set for {symbol}: {tp_price} (response: {result})")
             return True
         except Exception as e:
             logger.error(f"Error setting TP for {symbol}: {e}")

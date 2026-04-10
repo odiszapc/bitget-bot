@@ -4,6 +4,7 @@ Runs as a separate service, exposes REST endpoints.
 """
 
 import json
+import time
 import logging
 from flask import Flask, request, jsonify
 from exchange import Exchange
@@ -122,8 +123,7 @@ def api_short():
                 tp_set = True
                 break
             logger.warning(f"TP retry {attempt + 1}/3 for {symbol}")
-            import time as _time
-            _time.sleep(1)
+            time.sleep(1)
 
         position["take_profit"] = tp_price
 
