@@ -310,7 +310,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
             pos_dot = ' <span class="pos-dot"></span>' if sr["symbol"] in open_symbols else ""
             tp_ticks = sr.get("tp_ticks", 999)
-            tick_warn = f' <span class="tick-warn" title="TP distance {tp_ticks:.0f} ticks at ROI 3%">⚠</span>' if tp_ticks < 3 else ""
+            if tp_ticks < 3:
+                tick_size_v = sr.get("tick_size", 0)
+                tick_warn = f' <span class="tick-warn"><span class="tick-warn-icon">⚠</span><span class="tick-tooltip"><b>Low tick precision</b><br>TP distance: {tp_ticks:.1f} ticks at ROI 3%<br>Tick size: {tick_size_v}<br>TP may be adjusted to entry − 1 tick</span></span>'
+            else:
+                tick_warn = ""
 
             # Component detail classes
             slope_v = sr.get("slope", 0)
@@ -887,10 +891,58 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         50% {{ opacity: 0.6; box-shadow: 0 0 2px rgba(210, 153, 34, 0.3); }}
     }}
     .tick-warn {{
-        color: #d29922;
-        font-size: 11px;
+        position: relative;
+        display: inline-block;
         margin-left: 4px;
         cursor: help;
+    }}
+    .tick-warn-icon {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        font-size: 13px;
+        background: #d29922;
+        color: #0d1117;
+        border-radius: 4px;
+        font-weight: 700;
+        vertical-align: middle;
+        line-height: 1;
+    }}
+    .tick-tooltip {{
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1c2128;
+        border: 1px solid #d29922;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 12px;
+        color: #c9d1d9;
+        line-height: 1.6;
+        white-space: nowrap;
+        z-index: 60;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        pointer-events: none;
+    }}
+    .tick-tooltip::after {{
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #d29922;
+    }}
+    .tick-tooltip b {{
+        color: #d29922;
+        font-size: 13px;
+    }}
+    .tick-warn:hover .tick-tooltip {{
+        display: block;
     }}
     .footer {{
         margin-top: 32px;
