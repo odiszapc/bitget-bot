@@ -1,119 +1,156 @@
 # Bitget Short Bot — Project Context
 
 ## Overview
-This is an automated futures trading bot for Bitget exchange. It opens **short positions only** on USDT perpetual futures. The goal is small, frequent profits (~5% per trade) with strict risk management.
+Automated futures trading bot for Bitget exchange. Opens **short positions only** on USDT perpetual futures. Uses composite downtrend scoring to rank pairs and select the best short candidate.
 
 ## Trading Strategy
 
 ### Coin Selection (runs every cycle)
-1. Fetch all USDT perpetual futures pairs from Bitget (~200-300 pairs)
-2. **Liquidity filter**: keep only pairs with 24h volume > $5M
-3. **Volatility filter**: remove pairs with daily ATR(14) > 15%
-4. Remaining pool: ~30-50 pairs
+1. Fetch all USDT perpetual futures pairs from Bitget (~300 pairs)
+2. Fetch all tickers in one API call (~700 tickers)
+3. No volume filter — all pairs analyzed, volume shown in dashboard
+4. **Volatility filter**: remove pairs with ATR(14) > 15% (open positions exempt)
+5. Analyze remaining pairs (~480) with composite downtrend score
+6. Parallel scanning with ThreadPoolExecutor (7 threads, configurable)
 
-### Entry Signals (minimum 3 of 4 required)
-- **RSI(14) > 70** — overbought condition
-- **EMA(9) crosses below EMA(21)** — bearish crossover
-- **MACD line crosses below signal line** — bearish momentum
-- **Funding rate > +0.01%** — market overloaded with longs
+### Composite Downtrend Score
+Single score 0-100 ranking how strongly a pair is trending down:
+
+**4 components (normalized 0-100 across all pairs):**
+- **ADX directional** (30%): `(DI_minus - DI_plus) * ADX/100` — trend strength + direction
+- **Slope** (25%): linear regression slope as %/candle — price descent speed
+- **ROC weighted** (25%): `ROC(5)*0.4 + ROC(14)*0.35 + ROC(30)*0.25` — multi-period momentum
+- **EMA gap** (20%): `(EMA21 - EMA9) / price * 100` — bearish spread
+
+**Quality multipliers:**
+- **R²**: coefficient of determination of linear regression (period=30). Penalizes flash crashes (single candle spikes). Zero for uptrends (slope >= 0).
+- **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles. Only applies when total drop > 5%. Penalizes step-drops (TAO pattern: flat→dump→flat).
+
+**Formula:** `score = raw_score * effective_r2 * dc_penalty`
+
+### Entry Criteria (auto-trade)
+- `downtrend_score >= min_downtrend_score` (default 70, configurable)
+- No existing position on that symbol
+- All safety checks passed
 
 ### Timeframe
-- Default: 15-minute candles (configurable to 1h)
-- Bot runs main cycle every 15 minutes
+- 15-minute candles (configurable)
+- Bot runs main cycle every 5 minutes (configurable)
 
 ### Position Sizing
-- Max simultaneous positions: 5
-- Each position: total_balance / 5
+- Max simultaneous positions: configurable (`max_positions`)
+- Each position: `balance * position_size_pct / max_positions`
 - Leverage: 10x (configurable)
 - Margin mode: Cross
 
-### Stop-Loss (Variant 3: Hybrid ATR)
-- Calculate: 1.5 × ATR(14) as percentage
-- Stop-loss = max(2%, 1.5 × ATR)
-- This ensures stop is never tighter than 2%, but widens for volatile coins
-
-### Take-Profit (Hybrid ATR)
-- Calculate: 2.5 × ATR(14) as percentage
-- Take-profit = max(5%, 2.5 × ATR)
-- Ensures minimum 5% target, wider for volatile coins
+### Take-Profit
+- **Auto trades**: Hybrid ATR — `max(min_tp_pct, 0.1 * ATR)`
+- **Manual trades**: User selects TP ROI (1/2/3/4/5/10%), TP calculated as `entry * (1 - ROI/leverage/100)`
+- **Tick safety**: if TP rounds to entry price, forced to `entry - tick_size`
 
 ### Trailing Stop
-- When position profit reaches +3%: move stop to breakeven (entry price)
-- When profit reaches +4%: move stop to +2%
-- Continue trailing with 2% distance
+- When position profit reaches trailing_start_pct: move stop to breakeven
+- Continue trailing with trailing_distance_pct distance
 
-## Safety Mechanisms (checked BEFORE every trade)
-
-### 1. Daily Loss Limit
-- If daily P&L drops below -5% of starting balance → stop trading until next day (00:00 UTC reset)
-
-### 2. Bull Market Protection
-- If BTC/USDT price change over 24h > +5% → no new shorts
-
-### 3. News Calendar
-- No new positions 30 minutes before or after major events
-- Events: FOMC decisions, CPI releases, Non-Farm Payrolls
-- Calendar stored in `config.json`, updated manually or via API
-
-### 4. Position Limit
-- Max 5 open positions at any time
+## Safety Mechanisms
 
 ### Pre-trade checklist (ALL must pass):
-1. ✅ Daily loss < 5%
-2. ✅ BTC 24h change < +5%
-3. ✅ Not in news blackout window
-4. ✅ Open positions < 5
-5. ✅ Signal has 3+ indicators confirming
+1. BTC 24h change < +5% (bull market protection)
+2. Open positions < max_positions
 
-## Restart Safety
-- Bot saves state to `state.json` every cycle
-- On startup: reads state file, syncs with Bitget open positions
-- Duplicate protection: won't open second position on same pair
-- Trailing stop recovery: recalculates trailing levels on restart
+### Tick Size Protection
+- Cheap coins with coarse tick size may have TP = entry after rounding
+- API forces TP to at least `entry - 1 tick` if this happens
+- Dashboard shows ⚠ warning icon for pairs with < 3 ticks of TP distance
 
-## Project Structure
+## Fee Structure
+- Taker rate: 0.1% of notional (account-wide, not per-pair)
+- Open fee: `margin * leverage * 0.001`
+- Close fee: `close_notional * 0.001`
+- Round-trip at 10x: ~2% ROI breakeven
+- Dashboard shows full fee breakdown before opening manual trades
+
+## Architecture
+
+### Project Structure
 ```
 bitget-short-bot/
 ├── CLAUDE.md          # This file — project context
-├── README.md          # Setup and usage instructions
-├── config.json        # API keys, parameters, news calendar
+├── config.json        # API keys, parameters (gitignored)
+├── config.example.json
 ├── requirements.txt   # Python dependencies
-├── bot.py             # Main bot entry point and loop
-├── exchange.py        # Bitget API wrapper
-├── strategy.py        # Indicators, signals, filters
-├── risk.py            # Safety checks, position sizing, SL/TP
+├── Dockerfile
+├── docker-compose.yml # 3 services: bot, api, nginx
+├── bot.py             # Main bot entry point and cycle loop
+├── exchange.py        # Bitget API wrapper (ccxt) with retry
+├── strategy.py        # Composite downtrend scoring, indicators
+├── risk.py            # Safety checks, position sizing, trailing stops
+├── positions.py       # Shared position data builder (report + API)
 ├── state.py           # State persistence and recovery
-└── logs/              # Trade logs directory
+├── report.py          # HTML dashboard generator
+├── charts.py          # Chart generation (line charts with gradient)
+├── api_server.py      # Flask API for manual trading + data
+├── version.txt        # Auto-generated by pre-commit hook
+├── output/            # Generated HTML + chart PNGs (served by nginx)
+└── logs/              # Trade logs with daily rotation
 ```
 
+### Docker Services
+- **bot**: Main trading bot, runs cycles
+- **api**: Flask server on port 8432, manual trading + data endpoints
+- **nginx**: Serves `output/` on port 8080 (dashboard)
+
+### API Endpoints
+- `POST /api/short` — Open manual short (params: symbol, bet_pct, tp_roi_pct)
+- `GET /api/positions` — Live position data for table refresh
+- `GET /api/shorts` — Open positions + recent closed shorts
+
+### Dashboard Features
+- Auto-refresh Open Positions and Recent Shorts on page load
+- Manual refresh buttons with spinning icon
+- Market Scan table with sortable columns (click header → DESC sort)
+- Component bars visualization (ADX/Slope/ROC/EMA)
+- Position modal with charts (1m/15m/1h)
+- Trade modal with bet size, TP ROI selectors, full P&L breakdown
+- Toast notifications on successful trade
+- Progress bar for open positions (TP/Liq distance)
+- Fee and break-even price display
+
 ## Tech Stack
-- Python 3.10+
-- `ccxt` library for Bitget API
-- `pandas` + `ta` for technical indicators
+- Python 3.12
+- `ccxt` library for Bitget API (with retry on 429)
+- `pandas` + `ta` + `numpy` for technical indicators
+- `matplotlib` for chart generation
+- `flask` for API server
+- Docker + nginx for deployment
 - No external databases — JSON file for state
 
 ## Configuration (config.json)
 - `api_key`, `api_secret`, `passphrase` — Bitget API credentials
 - `leverage` — default 10
 - `max_positions` — default 5
+- `position_size_pct` — default 50
 - `timeframe` — default "15m"
-- `min_volume_usd` — default 5000000
 - `max_atr_pct` — default 15.0
+- `min_downtrend_score` — default 70 (auto-trade threshold)
 - `min_stop_pct` — default 2.0
-- `min_tp_pct` — default 5.0
-- `daily_loss_limit_pct` — default 5.0
 - `btc_bull_limit_pct` — default 5.0
 - `cycle_minutes` — default 5
+- `scan_threads` — default 7 (parallel API workers)
+- `charts_enabled` — default true
 - `demo` — default true (use Bitget demo/testnet)
 
 ## Key Commands
 - `python bot.py` — start the bot
-- `python bot.py --dry-run` — run without placing real orders (logging only)
+- `python bot.py --dry-run` — run without placing real orders
 - Logs are written to `logs/` directory with daily rotation
 
 ## Development Notes
 - Always test on Bitget demo account first (set `demo: true` in config)
 - The bot is designed to be restarted safely at any time
-- All API calls include error handling and retry logic
+- All API calls include error handling and retry logic (3 retries on 429)
 - Rate limiting: respect Bitget's 20 requests/second limit
-- every time you finish task commit and push automatically
+- Scan uses ThreadPoolExecutor for parallel OHLCV fetching
+- Charts reuse cached 15m candles from scan phase
+- Charts generated for union of top-20 per each metric + open positions
+- Every time you finish task commit and push automatically
