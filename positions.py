@@ -37,18 +37,9 @@ def build_position_data(
         break_even = ep.get("break_even_price", 0)
         pp = ep.get("price_precision", 2)
 
-        # TP/SL: exchange position fields, then state, then plan orders
+        # TP/SL: exchange position fields, then state (already synced)
         tp = ep.get("take_profit", 0) or tracked.get("take_profit", 0)
         sl = ep.get("stop_loss", 0) or tracked.get("current_sl") or tracked.get("stop_loss", 0)
-        if exchange and (not tp or not sl):
-            try:
-                tp_sl = exchange.get_tp_sl_for_symbol(symbol)
-                if not tp and tp_sl["tp"]:
-                    tp = float(tp_sl["tp"])
-                if not sl and tp_sl["sl"]:
-                    sl = float(tp_sl["sl"])
-            except Exception:
-                pass
 
         # Opened time: state first, then exchange timestamp as fallback
         opened_ts = tracked.get("opened_at", 0)

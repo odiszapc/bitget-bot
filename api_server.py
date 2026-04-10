@@ -19,17 +19,30 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Cached exchange instance — load_markets once, reuse across requests
+_cached_exchange = None
+
 
 def load_config() -> dict:
     with open("config.json", "r") as f:
         return json.load(f)
 
 
+def _get_exchange():
+    """Get or create cached exchange instance."""
+    global _cached_exchange
+    if _cached_exchange is None:
+        config = load_config()
+        _cached_exchange = Exchange(config)
+        _cached_exchange.load_markets()
+        logger.info("Exchange instance created and markets loaded")
+    return _cached_exchange
+
+
 def _get_synced_context():
     """Load config, exchange, sync state — shared setup for all read endpoints."""
     config = load_config()
-    exchange = Exchange(config)
-    exchange.load_markets()
+    exchange = _get_exchange()
     exchange_positions = exchange.get_open_positions()
     state = load_state()
     sync_positions_with_exchange(state, exchange_positions, exchange)
