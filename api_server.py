@@ -208,10 +208,14 @@ def api_positions():
                 try:
                     candles_1d = exchange.get_ohlcv(p["symbol"], '1d', limit=90)
                     if candles_1d and len(candles_1d) > 1:
+                        found = False
                         for i in range(len(candles_1d) - 1, -1, -1):
                             if candles_1d[i][2] >= liq:
                                 p["days_since_liq"] = len(candles_1d) - 1 - i
+                                found = True
                                 break
+                        if not found:
+                            p["days_since_liq"] = 1000 + len(candles_1d)
                 except Exception:
                     pass
 
