@@ -241,7 +241,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
 
     logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
-    for sr in scan_results[:20]:  # Log top 20 only
+    for sr in scan_results:
         parts = []
         for name in STRATEGIES:
             s = sr.get(name, {})
