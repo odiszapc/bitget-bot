@@ -309,6 +309,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             d_15m = f'{preview_charts["15m"]}?t={cache_bust}' if "15m" in preview_charts else ""
             d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
             pos_dot = ' <span class="pos-dot"></span>' if sr["symbol"] in open_symbols else ""
+            tp_ticks = sr.get("tp_ticks", 999)
+            tick_warn = f' <span class="tick-warn" title="TP distance {tp_ticks:.0f} ticks at ROI 3%">⚠</span>' if tp_ticks < 3 else ""
 
             # Component detail classes
             slope_v = sr.get("slope", 0)
@@ -325,7 +327,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="openModal('{modal_id}')"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
-                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
+                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}{tick_warn}</td>
                 <td data-v="{dt_score}" class="{score_cls}"><b>{dt_score:.0f}</b></td>
                 <td data-v="{r2_v}" class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
                 <td data-v="{dc_v}" class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
@@ -396,7 +398,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 </select>
             </div>
         </div>
-        <div class="trade-breakdown" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001">
+        <div class="trade-breakdown" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001" data-tick="{sr.get('tick_size', 0.01)}">
         </div>
         <div class="modal-actions">
             <div class="short-result"></div>
@@ -883,6 +885,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     @keyframes dot-pulse {{
         0%, 100% {{ opacity: 1; box-shadow: 0 0 6px rgba(210, 153, 34, 0.5); }}
         50% {{ opacity: 0.6; box-shadow: 0 0 2px rgba(210, 153, 34, 0.3); }}
+    }}
+    .tick-warn {{
+        color: #d29922;
+        font-size: 11px;
+        margin-left: 4px;
+        cursor: help;
     }}
     .footer {{
         margin-top: 32px;
@@ -1379,6 +1387,7 @@ function updateExposure(sel, leverage) {{
     var bal = parseFloat(bd.getAttribute("data-bal")) || 0;
     var lev = parseFloat(bd.getAttribute("data-lev")) || 10;
     var rate = parseFloat(bd.getAttribute("data-rate")) || 0.001;
+    var tick = parseFloat(bd.getAttribute("data-tick")) || 0.01;
 
     var margin = bal * betPct / 100;
     var notional = margin * lev;
@@ -1392,19 +1401,35 @@ function updateExposure(sel, leverage) {{
     var netRoi = margin > 0 ? (net / margin * 100) : 0;
     var netCls = net >= 0 ? "#3fb950" : "#f85149";
 
+    // TP tick distance warning
+    // Approximate: use notional/margin to get ~price, then calc ticks
+    var approxPrice = notional > 0 ? tick * Math.round(notional / margin / tick) * margin / lev : 0;
+    // Simpler: tp_distance in price = price * tpPriceChg, ticks = tp_distance / tick
+    // We don't have exact price here, but we can estimate from the scan data attribute
+    var tpTicks = bd.closest(".modal-content") ?
+        parseFloat((bd.closest(".modal-content").querySelector("[data-v]") || {{}}).getAttribute("data-v")) : 999;
+    // Better: calculate from tick and margin
+    // price ≈ notional / contracts, but we don't have contracts
+    // Simplest: show tick size and let the breakdown warn
+    var tickWarn = "";
+    // Use ratio: tp_price_change% vs tick/price → tick is data-tick, price unknown in JS
+    // Just show tick info as context
+    var tickInfo = "tick=" + tick;
+
     function R(label, val, formula) {{
         return '<div class="tb-row"><span class="tb-label">' + label + '</span><span class="tb-val">' + val + (formula ? ' <small style="color:#30363d">' + formula + '</small>' : '') + '</span></div>';
     }}
 
     bd.innerHTML =
-        R("Margin", margin.toFixed(2) + " USDT", bal.toFixed(1) + " × " + betPct + "%") +
-        R("Position", notional.toFixed(2) + " USDT", margin.toFixed(2) + " × " + lev + "x") +
-        R("Open fee", openFee.toFixed(4) + " USDT", notional.toFixed(2) + " × " + (rate*100).toFixed(1) + "%") +
-        R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " × " + (tpPriceChg*100).toFixed(2) + "%") +
-        R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " × " + (rate*100).toFixed(1) + "%") +
+        R("Margin", margin.toFixed(2) + " USDT", bal.toFixed(1) + " \u00d7 " + betPct + "%") +
+        R("Position", notional.toFixed(2) + " USDT", margin.toFixed(2) + " \u00d7 " + lev + "x") +
+        R("Open fee", openFee.toFixed(4) + " USDT", notional.toFixed(2) + " \u00d7 " + (rate*100).toFixed(1) + "%") +
+        R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " \u00d7 " + (tpPriceChg*100).toFixed(2) + "%") +
+        R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " \u00d7 " + (rate*100).toFixed(1) + "%") +
         R("Total fees", totalFee.toFixed(4) + " USDT", openFee.toFixed(4) + " + " + closeFee.toFixed(4)) +
         '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' +
-        (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span></div>";
+        (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span></div>' +
+        R("Tick size", tick.toString(), "min TP = entry - tick");
 }}
 
 // Manual SHORT button

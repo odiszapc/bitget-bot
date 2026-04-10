@@ -133,6 +133,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     timeframe = config.get("timeframe", "15m")
     min_volume = config.get("min_volume_usd", 5_000_000)
     max_atr = config.get("max_atr_pct", 15.0)
+    leverage = config.get("leverage", 10)
     active_strategy = "composite"
 
     scan_results = []
@@ -187,11 +188,20 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
         ticker_data = tickers.get(symbol, {})
         quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)
+        tick_size = exchange.get_tick_size(symbol)
+        last_price = float(ticker_data.get("last", 0) or 0) or df["close"].iloc[-1]
+
+        # Calculate TP ticks at default ROI (3%) for warning
+        default_roi = 3.0
+        tp_distance = last_price * (default_roi / leverage / 100)
+        tp_ticks = tp_distance / tick_size if tick_size > 0 else 999
 
         return {
             "symbol": symbol,
             "volume_24h": quote_volume,
             "funding_rate": 0,
+            "tick_size": tick_size,
+            "tp_ticks": round(tp_ticks, 1),
             "_candles_15m": candles,  # cached for chart generation
             **analysis,
         }, "ok", short_name

@@ -65,10 +65,14 @@ class Exchange:
 
     def _get_price_decimals(self, symbol: str) -> int:
         """Get number of decimal places for a symbol's price."""
-        tick = self.exchange.markets.get(symbol, {}).get("precision", {}).get("price", 0.01)
+        tick = self.get_tick_size(symbol)
         if tick and tick < 1:
             return max(0, int(round(-math.log10(tick))))
         return 2
+
+    def get_tick_size(self, symbol: str) -> float:
+        """Get minimum price increment for a symbol."""
+        return self.exchange.markets.get(symbol, {}).get("precision", {}).get("price", 0.01)
 
     def reset_api_counter(self) -> int:
         """Reset counter and return previous value."""

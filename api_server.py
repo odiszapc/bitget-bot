@@ -108,6 +108,13 @@ def api_short():
         tp_price = entry_price * (1 - tp_price_pct / 100)  # SHORT: TP below entry
         tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
 
+        # Safety: TP must be at least 1 tick below entry
+        tick_size = exchange.get_tick_size(symbol)
+        if tp_price >= entry_price:
+            tp_price = entry_price - tick_size
+            tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
+            logger.warning(f"TP adjusted to entry - 1 tick: {tp_price} (tick={tick_size})")
+
         # Open short with TP only
         position = exchange.open_short_tp_only(symbol, margin, tp_price)
         if not position:
