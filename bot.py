@@ -15,6 +15,7 @@ import time
 import logging
 import os
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from exchange import Exchange
 from strategy import (
@@ -162,45 +163,54 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
-    # ── Step 6: Analyze each symbol ──
+    # ── Step 6: Analyze each symbol (parallel) ──
     total_symbols = len(liquid_symbols)
     skipped_atr = 0
     skipped_data = 0
-    for sym_idx, symbol in enumerate(liquid_symbols):
-        is_open_position = symbol in open_position_symbols
-        short_name = symbol.split("/")[0].split(":")[0]
+    completed = 0
 
-        calls_before = exchange.api_call_count
-        t_start = time.time()
+    def _analyze_one(symbol):
+        """Fetch candles and analyze one symbol. Returns (result_dict, status)."""
+        short_name = symbol.split("/")[0].split(":")[0]
+        is_open = symbol in open_position_symbols
 
         candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
         df = candles_to_dataframe(candles)
         if df is None:
-            skipped_data += 1
-            logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — no data, skip")
-            continue
+            return None, "no_data", short_name
 
         atr_pct = calculate_atr(df)
-        if atr_pct > max_atr and not is_open_position:
-            skipped_atr += 1
-            calls_used = exchange.api_call_count - calls_before
-            logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — ATR {atr_pct:.1f}% > {max_atr}%, skip ({calls_used} calls)")
-            continue
+        if atr_pct > max_atr and not is_open:
+            return None, f"atr_{atr_pct:.1f}", short_name
 
         analysis = analyze_symbol(df, config)
 
-        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name}")
-
-        # Get 24h volume from tickers
         ticker_data = tickers.get(symbol, {})
         quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)
 
-        scan_results.append({
+        return {
             "symbol": symbol,
             "volume_24h": quote_volume,
             "funding_rate": 0,
             **analysis,
-        })
+        }, "ok", short_name
+
+    workers = config.get("scan_threads", 10)
+    logger.info(f"Scanning {total_symbols} pairs ({workers} threads)...")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_analyze_one, sym): sym for sym in liquid_symbols}
+        for future in as_completed(futures):
+            completed += 1
+            result, status, short_name = future.result()
+            if status == "no_data":
+                skipped_data += 1
+            elif status.startswith("atr_"):
+                skipped_atr += 1
+            else:
+                scan_results.append(result)
+            if completed % 50 == 0:
+                logger.info(f"  {completed}/{total_symbols} done...")
 
 
     # ── Step 7: Normalize composite scores and sort ──
