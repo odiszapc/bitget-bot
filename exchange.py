@@ -43,7 +43,15 @@ class Exchange:
     def _api_call(self, method: str, *args, **kwargs):
         """Call a ccxt method and increment the API counter."""
         self.api_call_count += 1
-        return getattr(self.exchange, method)(*args, **kwargs)
+        t0 = time.time()
+        result = getattr(self.exchange, method)(*args, **kwargs)
+        elapsed = (time.time() - t0) * 1000
+        # Short symbol for logging: first positional arg if string
+        sym = ""
+        if args and isinstance(args[0], str):
+            sym = f" {args[0].split(':')[0]}"
+        logger.debug(f"API #{self.api_call_count} {method}{sym} {elapsed:.0f}ms")
+        return result
 
     def _get_price_decimals(self, symbol: str) -> int:
         """Get number of decimal places for a symbol's price."""

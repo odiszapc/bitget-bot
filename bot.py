@@ -179,17 +179,21 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         is_open_position = symbol in open_position_symbols
         short_name = symbol.split("/")[0].split(":")[0]
 
-        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name}")
+        calls_before = exchange.api_call_count
+        t_start = time.time()
 
         candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
         df = candles_to_dataframe(candles)
         if df is None:
             skipped_data += 1
+            logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — no data, skip")
             continue
 
         atr_pct = calculate_atr(df)
         if atr_pct > max_atr and not is_open_position:
             skipped_atr += 1
+            calls_used = exchange.api_call_count - calls_before
+            logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — ATR {atr_pct:.1f}% > {max_atr}%, skip ({calls_used} calls)")
             continue
 
         # Collect volume ratio for market-wide indicator
@@ -202,6 +206,10 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         funding_rate = exchange.get_funding_rate(symbol)
         all_analysis = analyze_all_strategies(df, funding_rate, config)
         active = all_analysis[active_strategy]
+
+        calls_used = exchange.api_call_count - calls_before
+        elapsed = (time.time() - t_start) * 1000
+        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — {calls_used} calls, {elapsed:.0f}ms")
 
         # Get 24h volume from tickers
         ticker_data = tickers.get(symbol, {})
