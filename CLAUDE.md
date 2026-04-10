@@ -67,8 +67,19 @@ Single score 0-100 ranking how strongly a pair is trending down:
 - Taker rate: 0.1% of notional (account-wide, not per-pair)
 - Open fee: `margin * leverage * 0.001`
 - Close fee: `close_notional * 0.001`
+- Funding fee: every 8h, from `contract_settle_fee` bills
 - Round-trip at 10x: ~2% ROI breakeven
 - Dashboard shows full fee breakdown before opening manual trades
+- Recent Shorts fee popup shows exact breakdown per trade (from Bitget API)
+- Bitget reports gross PnL (without fees) — real net = PnL + funding - fees
+
+## Known Issues / TP Slippage Bug
+- `presetStopSurplusPrice` is calculated from `ticker["last"]` but fill may differ
+- For cheap coins (price < 0.1 USDT) with coarse tick (0.0001), TP can round to entry
+- Current mitigation: force TP = entry - tick if tp >= entry
+- Does NOT prevent slippage where fill < ticker (JOE/PHB cases)
+- Proper fix: set TP after fill (variant 2) — not yet implemented
+- Affected trades: JOE (lost 0.59), PHB (lost 0.52) — TP = entry, instant close
 
 ## Architecture
 
@@ -110,11 +121,16 @@ bitget-short-bot/
 - Manual refresh buttons with spinning icon
 - Market Scan table with sortable columns (click header → DESC sort)
 - Component bars visualization (ADX/Slope/ROC/EMA)
+- ⚠ tick precision warning icon with rich tooltip for cheap coins
 - Position modal with charts (1m/15m/1h)
-- Trade modal with bet size, TP ROI selectors, full P&L breakdown
+- Trade modal with bet size, TP ROI selectors, full P&L breakdown with formulas
 - Toast notifications on successful trade
-- Progress bar for open positions (TP/Liq distance)
-- Fee and break-even price display
+- Progress bar for open positions (inline in PnL cell, tooltip on hover)
+- Fee, break-even price, margin % display in Open Positions
+- Recent Shorts with entry/exit prices, fees, net profit, duration, balance delta
+- Fee breakdown popup on hover: opening fee, closing fee, funding fee, closing profit, position PnL
+- Open positions aligned with closed shorts (same columns)
+- Color coding: red symbol/exit for losing trades, green/red net
 
 ## Tech Stack
 - Python 3.12
@@ -150,7 +166,11 @@ bitget-short-bot/
 - The bot is designed to be restarted safely at any time
 - All API calls include error handling and retry logic (3 retries on 429)
 - Rate limiting: respect Bitget's 20 requests/second limit
-- Scan uses ThreadPoolExecutor for parallel OHLCV fetching
-- Charts reuse cached 15m candles from scan phase
+- Scan uses ThreadPoolExecutor for parallel OHLCV fetching (~7 threads)
+- Charts reuse cached 15m candles from scan phase (saves 20 API calls)
+- Charts parallelized with ThreadPoolExecutor (5 threads)
 - Charts generated for union of top-20 per each metric + open positions
+- API server caches Exchange instance (load_markets once)
+- TP/SL fetched once during sync, not duplicated in position builder
+- Per-pair scan logging: [N/total] SYMBOL
 - Every time you finish task commit and push automatically
