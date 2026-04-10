@@ -1464,8 +1464,7 @@ function updateExposure(sel, leverage) {{
         R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " * " + (tpPriceChg*100).toFixed(2) + "%") +
         R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " * " + (rate*100).toFixed(1) + "%") +
         R("Total fees", totalFee.toFixed(4) + " USDT", openFee.toFixed(4) + " + " + closeFee.toFixed(4)) +
-        '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' +
-        (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span></div>' +
+        '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + '% ROI)</span></div>' +
         R("Tick size", tick.toString(), "min TP = entry - tick");
 }}
 
