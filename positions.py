@@ -33,6 +33,8 @@ def build_position_data(
         unrealized_pnl = ep.get("unrealized_pnl", 0)
         pnl_pct = ep.get("percentage", 0)
         liq_price = ep.get("liquidation_price", 0)
+        deducted_fee = ep.get("deducted_fee", 0)
+        break_even = ep.get("break_even_price", 0)
         pp = ep.get("price_precision", 2)
 
         # TP/SL: exchange position fields, then state, then plan orders
@@ -116,6 +118,8 @@ def build_position_data(
             "prog_cls": prog_cls,
             "prog_label_l": prog_label_l,
             "prog_label_r": prog_label_r,
+            "deducted_fee": deducted_fee,
+            "break_even_price": break_even,
         })
 
     return result

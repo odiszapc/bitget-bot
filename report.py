@@ -89,7 +89,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{p['margin']:.2f} <small class="muted">({margin_pct:.0f}%)</small></td>
                 <td>{_fmt_price(p['sl'])}</td>
                 <td>{_fmt_price(p['tp'])}</td>
+                <td>{_fmt_price(p['break_even_price'])}</td>
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
+                <td class="warning">{p['deducted_fee']:.4f}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
@@ -121,7 +123,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">SL</span><span>{_fmt_price(p['sl'])}</span></div>
             <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(p['tp'])}</span></div>
+            <div class="modal-stat"><span class="label">Break Even</span><span>{_fmt_price(p['break_even_price'])}</span></div>
             <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(p['liq_price'])}</span></div>
+            <div class="modal-stat"><span class="label">Fee</span><span class="warning">{p['deducted_fee']:.4f}</span></div>
             <div class="modal-stat"><span class="label">Opened</span><span>{p['opened_str']}</span></div>
         </div>
         <div class="modal-progress"><div class="prog-track" style="height:10px" title="{prog_tooltip}"><div class="prog-fill {p['prog_cls']}" style="width:{p['prog_val']:.1f}%"></div></div></div>
@@ -131,7 +135,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="10" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="12" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -1243,7 +1247,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Margin</th>
             <th>SL</th>
             <th>TP</th>
+            <th>BE</th>
             <th>Liq</th>
+            <th>Fee</th>
             <th>PnL</th>
             <th>Opened</th>
         </tr>
@@ -1425,7 +1431,7 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="10" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="empty">No open positions</td></tr>';
             return;
         }}
 
@@ -1452,7 +1458,9 @@ function refreshPositions() {{
                 '<td>' + p.margin.toFixed(2) + ' <small class="muted">(' + marginPct + '%)</small></td>' +
                 '<td>' + fmtP(p.sl) + '</td>' +
                 '<td>' + fmtP(p.tp) + '</td>' +
+                '<td>' + fmtP(p.break_even_price) + '</td>' +
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
+                '<td class="warning">' + (p.deducted_fee || 0).toFixed(4) + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
                 '</tr>';
