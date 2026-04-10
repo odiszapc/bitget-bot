@@ -200,7 +200,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             potential_net = pnl - fee - close_fee_est
             net_cls = "positive" if potential_net >= 0 else "negative"
             pp = op.get("price_precision", 4)
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
+            sym_cls = "negative" if potential_net < 0 else ""
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym {sym_cls}">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
         # Closed shorts with entry/exit/fees/net
         prev_bal = None
@@ -1671,9 +1672,10 @@ function refreshShorts() {{
             var closeFeeEst = Math.abs((p.margin || 0) * (p.leverage || 10) * 0.001);
             var potNet = (p.unrealized_pnl || 0) - fee - closeFeeEst;
             var netCls = potNet >= 0 ? "positive" : "negative";
+            var symCls = potNet < 0 ? "negative" : "";
             var pp = p.price_precision || 4;
             html += '<div class="close-row close-open">' +
-                '<span class="close-sym">' + p.base + ' <span class="pos-dot"></span></span>' +
+                '<span class="close-sym ' + symCls + '">' + p.base + ' <span class="pos-dot"></span></span>' +
                 '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
                 '<span class="close-price muted">\u2014</span>' +
                 '<span class="close-fee">' + fee.toFixed(3) + '</span>' +
