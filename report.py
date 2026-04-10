@@ -239,7 +239,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             exit_cls = "negative" if exit_p > entry_p else ""  # price went up = bad for short
             pp = len(str(entry_p).rstrip('0').split('.')[-1]) if '.' in str(entry_p) else 0
 
-            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee">{fees:.3f}</span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+            fee_tip = f'Opening fee: {rc.get("open_fee", 0)}\nClosing fee: {rc.get("close_fee", 0)}\nFunding fee: {rc.get("funding_fee", 0)}\nClosing profit: {rc.get("close_profit", 0)}'
+            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip"><b>Fee breakdown</b><br>Opening fee: {rc.get("open_fee", 0)}<br>Closing fee: {rc.get("close_fee", 0)}<br>Funding fee: {rc.get("funding_fee", 0)}<br>Closing profit: {rc.get("close_profit", 0)}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
 
         if shorts_rows:
             closes_section = f"""
@@ -797,6 +798,45 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         text-align: right;
         color: #6e7681;
         font-size: 12px;
+    }}
+    .fee-tip-wrap {{
+        position: relative;
+        cursor: help;
+    }}
+    .fee-tip {{
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 12px;
+        color: #c9d1d9;
+        line-height: 1.8;
+        white-space: nowrap;
+        z-index: 60;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        pointer-events: none;
+        font-family: inherit;
+    }}
+    .fee-tip::after {{
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: #30363d;
+    }}
+    .fee-tip b {{
+        color: #8b949e;
+        font-size: 13px;
+    }}
+    .fee-tip-wrap:hover .fee-tip {{
+        display: block;
     }}
     .close-bal {{
         width: 55px;
@@ -1727,7 +1767,7 @@ function refreshShorts() {{
                 '<span class="close-sym ' + symCls + '">' + c.symbol + '</span>' +
                 '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
                 '<span class="close-price ' + exitCls + '">' + xp.toFixed(pp) + '</span>' +
-                '<span class="close-fee">' + fees.toFixed(3) + '</span>' +
+                '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip"><b>Fee breakdown</b><br>Opening fee: ' + (c.open_fee || 0) + '<br>Closing fee: ' + (c.close_fee || 0) + '<br>Funding fee: ' + (c.funding_fee || 0) + '<br>Closing profit: ' + (c.close_profit || 0) + '</span></span>' +
                 '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
                 '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
                 '<span class="close-delta ' + bdCls + '">' + bdStr + '</span>' +

@@ -433,11 +433,12 @@ class Exchange:
         Returns list sorted newest first.
         """
         try:
-            # Get bills to find symbols and balances
+            # Get bills to find symbols, balances, and fee breakdown
             bills = self.get_recent_close_shorts(limit=100)
             symbols_with_closes = set()
             bill_balances = {}
-            bill_fees = {}
+            # Collect all bills by symbol for fee breakdown
+            bills_by_sym = {}
             for b in bills:
                 sym = b.get('symbol', '')
                 bt = b.get('businessType', '')
@@ -445,12 +446,8 @@ class Exchange:
                     symbols_with_closes.add(sym)
                     ctime = int(b.get('cTime', 0))
                     bal = float(b.get('balance', 0))
-                    # Keep latest balance per symbol+time
                     bill_balances[f"{sym}_{ctime}"] = bal
-                # Collect all fees by symbol
-                if bt in ('open_short', 'close_short'):
-                    fee = abs(float(b.get('fee', 0) or 0))
-                    bill_fees.setdefault(sym, []).append(fee)
+                bills_by_sym.setdefault(sym, []).append(b)
 
             # Get orders for each symbol
             trades = []
@@ -478,12 +475,30 @@ class Exchange:
                         if not cl:
                             continue
                         dur_sec = (cl['time'] - op['time']) / 1000
-                        total_fee = op['fee'] + cl['fee']
-                        net = cl['profit'] - total_fee
+
+                        # Fee breakdown from bills
+                        sym_bills = bills_by_sym.get(sym, [])
+                        open_fee = op['fee']
+                        close_fee = cl['fee']
+                        # Sum funding fees between open and close
+                        funding_fee = 0.0
+                        close_profit = 0.0
+                        for sb in sym_bills:
+                            bt = sb.get('businessType', '')
+                            sbt = int(sb.get('cTime', 0))
+                            if sbt < op['time'] or sbt > cl['time']:
+                                continue
+                            if bt == 'contract_settle_fee':
+                                funding_fee += float(sb.get('amount', 0) or 0)
+                            if bt == 'close_short':
+                                close_profit += float(sb.get('amount', 0) or 0)
+
+                        total_fee = open_fee + close_fee
+                        net = cl['profit'] + funding_fee - total_fee
+
                         # Find balance from bills
                         bal_key = f"{sym}_{cl['time']}"
                         bal = bill_balances.get(bal_key, 0)
-                        # Try nearby timestamps if exact match fails
                         if not bal:
                             for bk, bv in bill_balances.items():
                                 if bk.startswith(sym + '_') and abs(int(bk.split('_')[1]) - cl['time']) < 5000:
@@ -495,12 +510,16 @@ class Exchange:
                             'symbol': short_name,
                             'entry_price': op['price'],
                             'exit_price': cl['price'],
-                            'fees': round(total_fee, 4),
-                            'net': round(net, 4),
-                            'profit': round(cl['profit'], 4),
+                            'fees': round(total_fee, 6),
+                            'net': round(net, 6),
+                            'profit': round(cl['profit'], 6),
                             'balance': round(bal, 2),
                             'duration_sec': dur_sec,
                             'timestamp': cl['time'] / 1000,
+                            'open_fee': round(open_fee, 6),
+                            'close_fee': round(close_fee, 6),
+                            'funding_fee': round(funding_fee, 6),
+                            'close_profit': round(close_profit, 6),
                         })
                 except Exception as e:
                     logger.debug(f"Error fetching orders for {ccxt_sym}: {e}")
