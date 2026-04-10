@@ -195,7 +195,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             **analysis,
         }, "ok", short_name
 
-    workers = config.get("scan_threads", 10)
+    workers = config.get("scan_threads", 5)
     logger.info(f"Scanning {total_symbols} pairs ({workers} threads)...")
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
