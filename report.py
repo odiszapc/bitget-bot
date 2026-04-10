@@ -1458,11 +1458,11 @@ function updateExposure(sel, leverage) {{
     }}
 
     bd.innerHTML =
-        R("Margin", margin.toFixed(2) + " USDT", bal.toFixed(1) + " x " + betPct + "%") +
-        R("Position", notional.toFixed(2) + " USDT", margin.toFixed(2) + " x " + lev + "x") +
-        R("Open fee", openFee.toFixed(4) + " USDT", notional.toFixed(2) + " x " + (rate*100).toFixed(1) + "%") +
-        R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " x " + (tpPriceChg*100).toFixed(2) + "%") +
-        R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " x " + (rate*100).toFixed(1) + "%") +
+        R("Margin", margin.toFixed(2) + " USDT", bal.toFixed(1) + " * " + betPct + "%") +
+        R("Position", notional.toFixed(2) + " USDT", margin.toFixed(2) + " * " + lev + "x") +
+        R("Open fee", openFee.toFixed(4) + " USDT", notional.toFixed(2) + " * " + (rate*100).toFixed(1) + "%") +
+        R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " * " + (tpPriceChg*100).toFixed(2) + "%") +
+        R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " * " + (rate*100).toFixed(1) + "%") +
         R("Total fees", totalFee.toFixed(4) + " USDT", openFee.toFixed(4) + " + " + closeFee.toFixed(4)) +
         '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' +
         (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span></div>' +
