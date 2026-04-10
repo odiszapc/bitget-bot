@@ -238,8 +238,8 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             "liq_dist_pct": round(liq_dist_pct, 1),
             "keep_margin_rate": kmr,
             "last_price": last_price,
-            "max_price_90d": 0,  # filled later for chart symbols
-            "risk_score": 0,     # filled later
+            "days_since_liq": -1,  # filled later for chart symbols
+            "risk_score": 1,       # filled later (1 = default/unknown)
             "_candles_15m": candles,
             **analysis,
         }, "ok", short_name
@@ -294,35 +294,51 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     risk_symbols = _get_chart_symbols(scan_results, open_position_symbols)
     logger.info(f"Fetching 90d daily candles for {len(risk_symbols)} symbols...")
 
-    def _fetch_max_90d(symbol):
+    def _fetch_days_since_liq(args):
+        symbol, approx_liq = args
         try:
             candles_1d = exchange.get_ohlcv(symbol, '1d', limit=90)
-            if candles_1d and len(candles_1d) > 1:
-                return symbol, max(c[2] for c in candles_1d)  # high
+            if candles_1d and len(candles_1d) > 1 and approx_liq > 0:
+                # Walk from newest to oldest
+                for i in range(len(candles_1d) - 1, -1, -1):
+                    if candles_1d[i][2] >= approx_liq:  # high >= liq
+                        days_ago = len(candles_1d) - 1 - i
+                        return symbol, days_ago
+            return symbol, -1  # never in 90d
         except Exception:
-            pass
-        return symbol, 0
+            return symbol, -1
 
-    max_prices = {}
+    # Build (symbol, approx_liq) pairs for chart symbols
+    liq_lookup = {sr["symbol"]: sr.get("approx_liq", 0) for sr in scan_results}
+    fetch_args = [(s, liq_lookup.get(s, 0)) for s in risk_symbols]
+
+    days_since = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_fetch_max_90d, s) for s in risk_symbols]
+        futures = [pool.submit(_fetch_days_since_liq, a) for a in fetch_args]
         for f in futures:
-            sym, mx = f.result()
-            if mx > 0:
-                max_prices[sym] = mx
+            sym, days = f.result()
+            days_since[sym] = days
 
-    # Apply max_price_90d and risk_score to scan_results
+    # Apply days_since_liq and risk_score to scan_results
     for sr in scan_results:
         sym = sr["symbol"]
-        mx = max_prices.get(sym, 0)
-        sr["max_price_90d"] = round(mx, 8)
-        liq = sr.get("approx_liq", 0)
-        if liq > 0 and mx > 0:
-            sr["risk_score"] = round(min(10, 10 * mx / liq), 1)
-        else:
-            sr["risk_score"] = 0
+        days = days_since.get(sym, -1)
+        sr["days_since_liq"] = days
 
-    logger.info(f"Risk scores calculated for {len(max_prices)} symbols")
+        if days < 0:
+            sr["risk_score"] = 1       # never in 90d
+        elif days <= 3:
+            sr["risk_score"] = 10      # 1-3 days ago
+        elif days <= 14:
+            sr["risk_score"] = 5       # 4-14 days
+        elif days <= 30:
+            sr["risk_score"] = 4       # 15-30 days
+        elif days <= 60:
+            sr["risk_score"] = 3       # 31-60 days
+        else:
+            sr["risk_score"] = 2       # 61-90 days
+
+    logger.info(f"Risk scores calculated for {len(days_since)} symbols")
 
     # ── Step 8: Execute trade (only if safe) ──
     candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]
