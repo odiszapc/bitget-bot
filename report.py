@@ -780,6 +780,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         color: #c9d1d9;
         font-weight: 600;
     }}
+    .close-sym.negative {{
+        color: #f85149;
+    }}
+    .close-price.negative {{
+        color: #f85149;
+    }}
     .close-price {{
         width: 70px;
         text-align: right;
