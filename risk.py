@@ -14,7 +14,6 @@ class RiskManager:
         self.daily_loss_limit = config.get("daily_loss_limit_pct", 5.0)
         self.btc_bull_limit = config.get("btc_bull_limit_pct", 5.0)
         self.max_positions = config.get("max_positions", 5)
-        self.news_blackout_minutes = config.get("news_blackout_minutes", 30)
         self.trailing_start_pct = config.get("trailing_start_pct", 3.0)
         self.trailing_distance_pct = config.get("trailing_distance_pct", 2.0)
 
@@ -55,40 +54,6 @@ class RiskManager:
 
         return True, f"BTC 24h: {btc_24h_change:+.2f}%"
 
-    def check_news_blackout(self) -> tuple[bool, str]:
-        """
-        Check if we're in a news blackout window.
-        Returns (is_safe, reason).
-        """
-        now = datetime.now(timezone.utc)
-        events = self.config.get("news_events", [])
-
-        for event in events:
-            try:
-                event_dt = datetime.strptime(
-                    f"{event['date']} {event['time']}", "%Y-%m-%d %H:%M"
-                ).replace(tzinfo=timezone.utc)
-
-                blackout_start = event_dt - timedelta(
-                    minutes=self.news_blackout_minutes
-                )
-                blackout_end = event_dt + timedelta(
-                    minutes=self.news_blackout_minutes
-                )
-
-                if blackout_start <= now <= blackout_end:
-                    msg = (
-                        f"News blackout: {event['event']} at "
-                        f"{event['date']} {event['time']} UTC"
-                    )
-                    logger.warning(msg)
-                    return False, msg
-            except (KeyError, ValueError) as e:
-                logger.debug(f"Invalid news event entry: {e}")
-                continue
-
-        return True, "No news blackout"
-
     def check_position_count(
         self, open_positions: int
     ) -> tuple[bool, str]:
@@ -121,7 +86,6 @@ class RiskManager:
 
         checks = [
             self.check_btc_trend(btc_24h_change),
-            self.check_news_blackout(),
             self.check_position_count(open_positions),
         ]
 
@@ -131,53 +95,6 @@ class RiskManager:
                 all_passed = False
 
         return all_passed, reasons
-
-    def check_oi_spike(
-        self, oi_changes: list[dict]
-    ) -> tuple[bool, str]:
-        """
-        Check if any symbol has an extreme OI change.
-        oi_changes: list of {symbol, oi_change_pct}
-        Returns (is_safe, reason).
-        """
-        threshold = self.config.get("oi_spike_pct", 10.0)
-        spiked = [
-            c for c in oi_changes
-            if abs(c["oi_change_pct"]) >= threshold
-        ]
-        if spiked:
-            top = sorted(spiked, key=lambda c: abs(c["oi_change_pct"]), reverse=True)[:3]
-            names = ", ".join(
-                f"{c['symbol'].split('/')[0]} {c['oi_change_pct']:+.1f}%"
-                for c in top
-            )
-            msg = f"OI spike detected: {names} (limit: {threshold}%)"
-            logger.warning(msg)
-            return False, msg
-
-        if oi_changes:
-            avg = sum(c["oi_change_pct"] for c in oi_changes) / len(oi_changes)
-            return True, f"OI avg change: {avg:+.1f}% ({len(oi_changes)} pairs)"
-        return True, "OI: no data"
-
-    def check_market_volume(
-        self, market_volume_ratio: float
-    ) -> tuple[bool, str]:
-        """
-        Check if market-wide volume is abnormally high.
-        market_volume_ratio: average (current_volume / avg_volume) across symbols.
-        Returns (is_safe, reason).
-        """
-        threshold = self.config.get("market_volume_spike_multiplier", 3.0)
-        if market_volume_ratio >= threshold:
-            msg = (
-                f"Market volume spike: {market_volume_ratio:.1f}x avg "
-                f"(limit: {threshold}x)"
-            )
-            logger.warning(msg)
-            return False, msg
-
-        return True, f"Market volume: {market_volume_ratio:.1f}x avg"
 
     def calculate_position_size(
         self, balance: float, open_positions: int

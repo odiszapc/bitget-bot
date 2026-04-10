@@ -74,7 +74,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             def _fmt_price(v, _pp=pp):
                 return f"{v:.{_pp}f}" if v else "-"
 
-            prog_bar_html = f"""<div class="prog-wrap"><div class="prog-labels"><span>{p['prog_label_l']}</span><span>{p['prog_label_r']}</span></div><div class="prog-track"><div class="prog-fill {p['prog_cls']}" style="width:{p['prog_val']:.1f}%"></div><div class="prog-thumb {p['prog_cls']}" style="left:{p['prog_val']:.1f}%"></div></div><div class="prog-pct {p['prog_cls']}">{p['prog_val']:.0f}%</div></div>"""
+            prog_tooltip = f"{p['prog_label_l']} ← {p['prog_val']:.0f}% → {p['prog_label_r']}"
+            prog_bar_inline = f'<div class="prog-track prog-inline" title="{prog_tooltip}"><div class="prog-fill {p["prog_cls"]}" style="width:{p["prog_val"]:.1f}%"></div></div>'
+
+            margin_pct = (p['margin'] / current_balance * 100) if current_balance > 0 else 0
 
             pos_modal_id = f"pos-modal-{pidx}"
             position_rows += f"""
@@ -83,14 +86,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
                 <td>{p['leverage']:.0f}x</td>
-                <td>{p['margin']:.2f}</td>
+                <td>{p['margin']:.2f} <small class="muted">({margin_pct:.0f}%)</small></td>
                 <td>{_fmt_price(p['sl'])}</td>
                 <td>{_fmt_price(p['tp'])}</td>
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
-                <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f}</td>
-                <td class="{p['pnl_class']}">{p['pnl_pct']:+.2f}%</td>
+                <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
-                <td>{prog_bar_html}</td>
             </tr>"""
 
             # Build position modal with charts
@@ -130,7 +131,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="12" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="10" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -160,36 +161,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         api_class = "negative" if api_rps > api_limit * 0.8 else "positive"
         cycle_duration = cycle_info.get("cycle_duration", 0)
 
-        # Build market indicators (OI + Volume)
-        oi_changes = cycle_info.get("oi_changes", [])
-        market_vol_ratio = cycle_info.get("market_volume_ratio", 1.0)
-        oi_spike_threshold = cycle_info.get("config", {}).get("oi_spike_pct", 10.0)
-        vol_spike_threshold = cycle_info.get("config", {}).get("market_volume_spike_multiplier", 3.0)
-
-        indicators_html = ""
-        if oi_changes or market_vol_ratio != 1.0:
-            # Volume indicator
-            vol_class = "negative" if market_vol_ratio >= vol_spike_threshold else "positive"
-            indicators_html += f'<div class="indicator"><span class="indicator-label">Market Volume:</span> <span class="{vol_class}">{market_vol_ratio:.1f}x avg</span> <span class="muted">(limit: {vol_spike_threshold}x)</span></div>\n'
-
-            # OI indicator
-            if oi_changes:
-                top_oi = sorted(oi_changes, key=lambda c: abs(c["oi_change_pct"]), reverse=True)[:5]
-                oi_items = ""
-                for c in top_oi:
-                    sym = c["symbol"].split("/")[0]
-                    pct = c["oi_change_pct"]
-                    oi_cls = "negative" if abs(pct) >= oi_spike_threshold else ("warning" if abs(pct) >= oi_spike_threshold * 0.5 else "positive")
-                    oi_items += f'<span class="oi-tag {oi_cls}">{_esc(sym)} {pct:+.1f}%</span> '
-                avg_oi = sum(c["oi_change_pct"] for c in oi_changes) / len(oi_changes)
-                avg_oi_cls = "negative" if abs(avg_oi) >= oi_spike_threshold else "positive"
-                indicators_html += f'<div class="indicator"><span class="indicator-label">OI Changes:</span> {oi_items}</div>\n'
-                indicators_html += f'<div class="indicator"><span class="indicator-label">OI Avg:</span> <span class="{avg_oi_cls}">{avg_oi:+.1f}%</span> <span class="muted">({len(oi_changes)} pairs, limit: {oi_spike_threshold}%)</span></div>\n'
-            else:
-                indicators_html += '<div class="indicator"><span class="indicator-label">OI:</span> <span class="muted">no data (first cycle)</span></div>\n'
-
-        indicators_section = f'<div class="indicators">{indicators_html}</div>' if indicators_html else ""
-
         cycle_section = f"""
 <div class="cycle-panel">
     <div class="cycle-header">
@@ -198,7 +169,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="cycle-time">{api_calls} api calls <span class="{api_class}">({api_rps:.2f}/sec, limit {api_limit}/sec)</span> | cycle {cycle_duration}s</div>
     </div>
     <div class="checks">{checks_html}</div>
-    {indicators_section}
     <div class="outcome {outcome_class}">{_esc(outcome)}</div>
     <div class="countdown-row">
         <span class="countdown-label">Next cycle in</span>
@@ -583,6 +553,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         background: #21262d;
         border-radius: 4px;
         overflow: visible;
+    }}
+    .prog-inline {{
+        height: 5px;
+        margin-top: 5px;
+        overflow: hidden;
+        cursor: help;
     }}
     .prog-fill {{
         height: 100%;
@@ -1212,9 +1188,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>TP</th>
             <th>Liq</th>
             <th>PnL</th>
-            <th>PnL %</th>
             <th>Opened</th>
-            <th style="min-width:120px">Progress</th>
         </tr>
     </thead>
     <tbody id="positions-body">
@@ -1389,10 +1363,11 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="12" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="empty">No open positions</td></tr>';
             return;
         }}
 
+        var bal = data.balance || 1;
         var html = "";
         for (var i = 0; i < positions.length; i++) {{
             var p = positions[i];
@@ -1403,26 +1378,21 @@ function refreshPositions() {{
                 return v ? v.toFixed(pp) : "-";
             }}
 
-            // Progress bar
-            var progHtml = '<div class="prog-wrap">' +
-                '<div class="prog-labels"><span>' + (p.prog_label_l || "") + '</span><span>' + (p.prog_label_r || "") + '</span></div>' +
-                '<div class="prog-track"><div class="prog-fill ' + p.prog_cls + '" style="width:' + p.prog_val + '%"></div>' +
-                '<div class="prog-thumb ' + p.prog_cls + '" style="left:' + p.prog_val + '%"></div></div>' +
-                '<div class="prog-pct ' + p.prog_cls + '">' + Math.round(p.prog_val) + '%</div></div>';
+            var progTip = (p.prog_label_l||"") + " \u2190 " + Math.round(p.prog_val) + "% \u2192 " + (p.prog_label_r||"");
+            var progBar = '<div class="prog-track prog-inline" title="' + progTip + '"><div class="prog-fill ' + p.prog_cls + '" style="width:' + p.prog_val + '%"></div></div>';
+            var marginPct = Math.round(p.margin / bal * 100);
 
             html += '<tr class="pos-row">' +
                 '<td class="symbol">' + p.base + '<span class="quote">/' + p.quote + '</span></td>' +
                 '<td>' + fmtP(p.entry_price) + '</td>' +
                 '<td>' + fmtP(p.current_price) + '</td>' +
                 '<td>' + p.leverage.toFixed(0) + 'x</td>' +
-                '<td>' + p.margin.toFixed(2) + '</td>' +
+                '<td>' + p.margin.toFixed(2) + ' <small class="muted">(' + marginPct + '%)</small></td>' +
                 '<td>' + fmtP(p.sl) + '</td>' +
                 '<td>' + fmtP(p.tp) + '</td>' +
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
-                '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + '</td>' +
-                '<td class="' + pnlCls + '">' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%</td>' +
+                '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
-                '<td>' + progHtml + '</td>' +
                 '</tr>';
         }}
         tbody.innerHTML = html;

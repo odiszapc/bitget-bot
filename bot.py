@@ -158,12 +158,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         rps = api_calls / (cycle_minutes * 60)
         logger.info(f"API calls this cycle: {api_calls} ({rps:.2f}/sec, limit 20/sec)")
         save_state(state)
-        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": {}, "oi_changes": [], "market_volume_ratio": 1.0, "recent_closes": []}
+        cycle_info = {"checks": reasons, "outcome": f"Error fetching tickers: {e}", "cycle_minutes": cycle_minutes, "scan_results": [], "active_strategy": active_strategy, "api_calls": api_calls, "config": config, "chart_map": {}, "recent_closes": []}
         generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
         return
 
     # ── Step 6: Analyze each symbol ──
-    volume_ratios = []
     total_symbols = len(liquid_symbols)
     skipped_atr = 0
     skipped_data = 0
@@ -187,13 +186,6 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             calls_used = exchange.api_call_count - calls_before
             logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — ATR {atr_pct:.1f}% > {max_atr}%, skip ({calls_used} calls)")
             continue
-
-        # Collect volume ratio for market-wide indicator
-        if len(df) >= 21:
-            avg_vol = df["volume"].iloc[-21:-1].mean()
-            cur_vol = df["volume"].iloc[-1]
-            if avg_vol > 0:
-                volume_ratios.append(cur_vol / avg_vol)
 
         analysis = analyze_symbol(df, config)
 
@@ -228,50 +220,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             f"ROC={sr.get('roc_w',0):+.2f} EMA={sr.get('ema_gap',0):+.3f}"
         )
 
-    # ── Step 7b: Fetch OI for top pairs and run market checks ──
-    oi_changes = []
-    if "oi_snapshots" not in state:
-        state["oi_snapshots"] = {}
-
-    oi_pairs = scan_results[:20]
-    logger.info(f"Fetching OI for top {len(oi_pairs)} pairs...")
-    for oi_idx, sr in enumerate(oi_pairs):
-        symbol = sr["symbol"]
-        short_name = symbol.split("/")[0].split(":")[0]
-        oi = exchange.get_open_interest(symbol)
-        if oi and oi["value"] > 0:
-            prev = state["oi_snapshots"].get(symbol)
-            if prev and prev.get("value", 0) > 0:
-                change_pct = (oi["value"] - prev["value"]) / prev["value"] * 100
-                oi_changes.append({
-                    "symbol": symbol,
-                    "oi_value": oi["value"],
-                    "oi_change_pct": change_pct,
-                })
-            state["oi_snapshots"][symbol] = {
-                "value": oi["value"],
-                "timestamp": time.time(),
-            }
-        logger.info(f"  [{oi_idx + 1}/{len(oi_pairs)}] {short_name} OI")
-
-    market_volume_ratio = (
-        sum(volume_ratios) / len(volume_ratios) if volume_ratios else 1.0
-    )
-
-    oi_safe, oi_reason = risk.check_oi_spike(oi_changes)
-    vol_safe, vol_reason = risk.check_market_volume(market_volume_ratio)
-
-    reasons.append(f"{'✅' if oi_safe else '❌'} {oi_reason}")
-    reasons.append(f"{'✅' if vol_safe else '❌'} {vol_reason}")
-
-    if not oi_safe or not vol_safe:
-        all_safe = False
-        logger.info("Market indicator check failed — blocking auto trade")
-
-    for reason in reasons[-2:]:
-        logger.info(f"  {reason}")
-
-    # ── Step 7c: Generate charts for top pairs ──
+    # ── Step 7b: Generate charts for top pairs ──
     chart_map = {}
     if config.get("charts_enabled", False):
         logger.info("Generating charts for top 20 pairs...")
@@ -372,7 +321,6 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         "checks": reasons, "outcome": outcome, "cycle_minutes": cycle_minutes,
         "scan_results": scan_results, "active_strategy": active_strategy,
         "api_calls": api_calls, "config": config, "chart_map": chart_map,
-        "oi_changes": oi_changes, "market_volume_ratio": market_volume_ratio,
         "recent_closes": recent_closes, "cycle_duration": cycle_duration,
     }
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
