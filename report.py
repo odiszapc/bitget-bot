@@ -243,21 +243,23 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             cf = rc.get("close_fee", 0)
             ff = rc.get("funding_fee", 0)
             cp = rc.get("close_profit", 0)
-            def _fc(v, is_profit=False):
-                """Format fee/profit value with color class."""
+            pos_pnl = cp + ff - of - cf  # net after all fees
+            def _fv(v):
+                """Format value with sign and color."""
                 if v == 0:
-                    return f'<span class="ft-zero">{v:>12.8f}</span>'
-                elif is_profit:
-                    return f'<span class="ft-profit">{v:>12.8f}</span>'
+                    return f'<span class="ft-zero">{v:>13.8f}</span>'
+                elif v > 0:
+                    return f'<span class="ft-pos">+{v:>12.8f}</span>'
                 else:
-                    return f'<span class="ft-fee">{v:>12.8f}</span>'
+                    return f'<span class="ft-neg">{v:>13.8f}</span>'
 
             fee_popup = (
                 f'<b>Fee breakdown</b>'
-                f'<div class="ft-row"><span class="ft-label">Opening fee</span>{_fc(of)}</div>'
-                f'<div class="ft-row"><span class="ft-label">Closing fee</span>{_fc(cf)}</div>'
-                f'<div class="ft-row"><span class="ft-label">Funding fee</span>{_fc(ff)}</div>'
-                f'<div class="ft-row ft-sep"><span class="ft-label">Closing profit</span>{_fc(cp, True)}</div>'
+                f'<div class="ft-row"><span class="ft-label">Closing profit</span>{_fv(cp)}</div>'
+                f'<div class="ft-row"><span class="ft-label">Funding fee</span>{_fv(ff)}</div>'
+                f'<div class="ft-row"><span class="ft-label">Opening fee</span>{_fv(-of)}</div>'
+                f'<div class="ft-row"><span class="ft-label">Closing fee</span>{_fv(-cf)}</div>'
+                f'<div class="ft-row ft-sep"><span class="ft-label">Position PnL</span>{_fv(pos_pnl)}</div>'
             )
             shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip">{fee_popup}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
 
@@ -864,18 +866,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     .ft-label {{
         color: #6e7681;
     }}
-    .ft-fee {{
+    .ft-neg {{
         color: #f85149;
         font-family: inherit;
         text-align: right;
     }}
-    .ft-profit {{
+    .ft-pos {{
         color: #58a6ff;
         font-family: inherit;
         text-align: right;
     }}
     .ft-zero {{
-        color: #30363d;
+        color: #484f58;
         font-family: inherit;
         text-align: right;
     }}
@@ -1816,7 +1818,7 @@ function refreshShorts() {{
                 '<span class="close-sym ' + symCls + '">' + c.symbol + '</span>' +
                 '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
                 '<span class="close-price ' + exitCls + '">' + xp.toFixed(pp) + '</span>' +
-                '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip">' + (function() {{ var of=c.open_fee||0, cf=c.close_fee||0, ff=c.funding_fee||0, cp=c.close_profit||0; function fv(v,p) {{ var cls=v===0?"ft-zero":(p?"ft-profit":"ft-fee"); return "<span class=\""+cls+"\">"+v.toFixed(8)+"</span>"; }} return "<b>Fee breakdown</b>" + "<div class=\"ft-row\"><span class=\"ft-label\">Opening fee</span>"+fv(of)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Closing fee</span>"+fv(cf)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Funding fee</span>"+fv(ff)+"</div>" + "<div class=\"ft-row ft-sep\"><span class=\"ft-label\">Closing profit</span>"+fv(cp,true)+"</div>"; }})() + '</span></span>' +
+                '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip">' + (function() {{ var of=c.open_fee||0, cf=c.close_fee||0, ff=c.funding_fee||0, cp=c.close_profit||0, pp=cp+ff-of-cf; function fv(v) {{ if(v===0) return "<span class=\"ft-zero\">  0.00000000</span>"; return v>0 ? "<span class=\"ft-pos\">+"+v.toFixed(8)+"</span>" : "<span class=\"ft-neg\">"+v.toFixed(8)+"</span>"; }} return "<b>Fee breakdown</b>" + "<div class=\"ft-row\"><span class=\"ft-label\">Closing profit</span>"+fv(cp)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Funding fee</span>"+fv(ff)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Opening fee</span>"+fv(-of)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Closing fee</span>"+fv(-cf)+"</div>" + "<div class=\"ft-row ft-sep\"><span class=\"ft-label\">Position PnL</span>"+fv(pp)+"</div>"; }})() + '</span></span>' +
                 '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
                 '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
                 '<span class="close-delta ' + bdCls + '">' + bdStr + '</span>' +

@@ -476,25 +476,24 @@ class Exchange:
                             continue
                         dur_sec = (cl['time'] - op['time']) / 1000
 
-                        # Fee breakdown from bills
+                        # Fee breakdown
                         sym_bills = bills_by_sym.get(sym, [])
                         open_fee = op['fee']
                         close_fee = cl['fee']
-                        # Sum funding fees between open and close
+                        close_profit = cl['profit']  # totalProfits from order (reliable)
+
+                        # Sum funding fees between open and close (with 1s tolerance)
                         funding_fee = 0.0
-                        close_profit = 0.0
                         for sb in sym_bills:
                             bt = sb.get('businessType', '')
                             sbt = int(sb.get('cTime', 0))
-                            if sbt < op['time'] or sbt > cl['time']:
+                            if sbt < op['time'] - 1000 or sbt > cl['time'] + 1000:
                                 continue
                             if bt == 'contract_settle_fee':
                                 funding_fee += float(sb.get('amount', 0) or 0)
-                            if bt == 'close_short':
-                                close_profit += float(sb.get('amount', 0) or 0)
 
                         total_fee = open_fee + close_fee
-                        net = cl['profit'] + funding_fee - total_fee
+                        net = close_profit + funding_fee - total_fee
 
                         # Find balance from bills
                         bal_key = f"{sym}_{cl['time']}"
