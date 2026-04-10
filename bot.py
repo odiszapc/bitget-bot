@@ -172,16 +172,25 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
 
     # ── Step 6: Analyze each symbol ──
     volume_ratios = []
-    for symbol in liquid_symbols:
+    total_symbols = len(liquid_symbols)
+    skipped_atr = 0
+    skipped_data = 0
+    for sym_idx, symbol in enumerate(liquid_symbols):
         is_open_position = symbol in open_position_symbols
+        short_name = symbol.split("/")[0].split(":")[0]
+
+        if (sym_idx + 1) % 50 == 0 or sym_idx == 0:
+            logger.info(f"  Analyzing {sym_idx + 1}/{total_symbols}...")
 
         candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
         df = candles_to_dataframe(candles)
         if df is None:
+            skipped_data += 1
             continue
 
         atr_pct = calculate_atr(df)
         if atr_pct > max_atr and not is_open_position:
+            skipped_atr += 1
             continue
 
         # Collect volume ratio for market-wide indicator
@@ -223,6 +232,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         time.sleep(0.1)
 
     # ── Step 7: Normalize composite scores and sort ──
+    logger.info(f"Analysis done: {len(scan_results)} passed, {skipped_data} no data, {skipped_atr} high ATR")
     normalize_downtrend_scores(scan_results)
 
     if active_strategy == "composite":
@@ -231,7 +241,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
 
     logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
-    for sr in scan_results:
+    for sr in scan_results[:20]:  # Log top 20 only
         parts = []
         for name in STRATEGIES:
             s = sr.get(name, {})
