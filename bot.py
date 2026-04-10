@@ -299,12 +299,13 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         try:
             candles_1d = exchange.get_ohlcv(symbol, '1d', limit=90)
             if candles_1d and len(candles_1d) > 1 and approx_liq > 0:
-                # Walk from newest to oldest
                 for i in range(len(candles_1d) - 1, -1, -1):
                     if candles_1d[i][2] >= approx_liq:  # high >= liq
                         days_ago = len(candles_1d) - 1 - i
                         return symbol, days_ago
-            return symbol, -1  # never in 90d
+                # Never above liq — encode as 1000+candles to distinguish from "found"
+                return symbol, 1000 + len(candles_1d)
+            return symbol, -1  # no data
         except Exception:
             return symbol, -1
 
@@ -326,7 +327,9 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         sr["days_since_liq"] = days
 
         if days < 0:
-            sr["risk_score"] = 1       # never in 90d
+            sr["risk_score"] = 10      # no data = risky
+        elif days >= 1000:
+            sr["risk_score"] = 1       # never above liq in available history
         elif days <= 3:
             sr["risk_score"] = 10      # 1-3 days ago
         elif days <= 14:

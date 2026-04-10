@@ -93,7 +93,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
                 <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{f"{-p['deducted_fee']:+.4f}" if p['deducted_fee'] != 0 else "0.0000"}</td>
                 <td class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{f"{p['funding_fee']:+.4f}" if p['funding_fee'] != 0 else "0.0000"}</td>
-                <td>{f"{p.get('days_since_liq')}d" if 0 <= p.get('days_since_liq', -1) < 90 else ("90d+" if p.get('days_since_liq', -1) >= 90 else "—")}</td>
+                <td>{f"{p.get('days_since_liq') - 1000}d+" if p.get('days_since_liq', -1) >= 1000 else (f"{p.get('days_since_liq')}d" if p.get('days_since_liq', -1) >= 0 else "—")}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
@@ -379,7 +379,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
                 <td data-v="{sr.get('risk_score', 0)}" class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
                 <td data-v="{sr.get('approx_liq', 0)}">{sr.get('approx_liq', 0):.4g}</td>
-                <td data-v="{sr.get('days_since_liq', -1)}">{f"{sr.get('days_since_liq')}d ago" if 0 <= sr.get('days_since_liq', -1) < 90 else ("90d+" if sr.get('days_since_liq', -1) >= 90 else "—")}</td>
+                <td data-v="{sr.get('days_since_liq', -1) - 1000 if sr.get('days_since_liq', -1) >= 1000 else sr.get('days_since_liq', -1)}">{f"{sr.get('days_since_liq') - 1000}d+" if sr.get('days_since_liq', -1) >= 1000 else (f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "—")}</td>
                 <td data-v="{comp_sum}" class="comp-bars">{comp_bars}</td>
             </tr>"""
 
@@ -411,7 +411,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">Risk</span><span class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}/10</span></div>
             <div class="modal-stat"><span class="label">Liq (~)</span><span>{sr.get('approx_liq', 0):.4g} (+{sr.get('liq_dist_pct', 0):.0f}%)</span></div>
-            <div class="modal-stat"><span class="label">Last@Liq</span><span>{f"{sr.get('days_since_liq')}d ago" if 0 <= sr.get('days_since_liq', -1) < 90 else ("90d+" if sr.get('days_since_liq', -1) >= 90 else "—")}</span></div>
+            <div class="modal-stat"><span class="label">Last@Liq</span><span>{f"{sr.get('days_since_liq') - 1000}d+" if sr.get('days_since_liq', -1) >= 1000 else (f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "—")}</span></div>
         </div>
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
@@ -1756,7 +1756,7 @@ function refreshPositions() {{
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
                 (function() {{ var df=p.deducted_fee||0; var cls=df>0?"negative":(df<0?"positive":"muted"); return '<td class="'+cls+'">'+(df!==0?(-df>0?"+":"")+(-df).toFixed(4):"0.0000")+'</td>'; }})() +
                 (function() {{ var ff=p.funding_fee||0; var cls=ff>0?"positive":(ff<0?"negative":"muted"); return '<td class="'+cls+'">'+(ff!==0?(ff>0?"+":"")+ff.toFixed(4):"0.0000")+'</td>'; }})() +
-                '<td>' + (function() {{ var d=p.days_since_liq; if(d===undefined||d===null||d<0) return "\u2014"; if(d>=90) return "90d+"; return d+"d"; }})() + '</td>' +
+                '<td>' + (function() {{ var d=p.days_since_liq; if(d===undefined||d===null||d<0) return "\u2014"; if(d>=1000) return (d-1000)+"d+"; return d+"d"; }})() + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
                 '</tr>';
