@@ -91,8 +91,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{_fmt_price(p['tp'])}</td>
                 <td>{_fmt_price(p['break_even_price'])}</td>
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
-                <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{-p['deducted_fee']:+.4f if p['deducted_fee'] != 0 else '0.0000'}</td>
-                <td class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{p['funding_fee']:+.4f if p['funding_fee'] != 0 else '0.0000'}</td>
+                <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{f"{-p['deducted_fee']:+.4f}" if p['deducted_fee'] != 0 else "0.0000"}</td>
+                <td class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{f"{p['funding_fee']:+.4f}" if p['funding_fee'] != 0 else "0.0000"}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
@@ -126,8 +126,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(p['tp'])}</span></div>
             <div class="modal-stat"><span class="label">Break Even</span><span>{_fmt_price(p['break_even_price'])}</span></div>
             <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(p['liq_price'])}</span></div>
-            <div class="modal-stat"><span class="label">Fee</span><span class="{'negative' if p['deducted_fee'] > 0 else 'muted'}">{-p['deducted_fee']:+.4f if p['deducted_fee'] != 0 else '0.0000'}</span></div>
-            <div class="modal-stat"><span class="label">Funding</span><span class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{p['funding_fee']:+.4f if p['funding_fee'] != 0 else '0.0000'}</span></div>
+            <div class="modal-stat"><span class="label">Fee</span><span class="{'negative' if p['deducted_fee'] > 0 else 'muted'}">{f"{-p['deducted_fee']:+.4f}" if p['deducted_fee'] != 0 else "0.0000"}</span></div>
+            <div class="modal-stat"><span class="label">Funding</span><span class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{f"{p['funding_fee']:+.4f}" if p['funding_fee'] != 0 else "0.0000"}</span></div>
             <div class="modal-stat"><span class="label">Opened</span><span>{p['opened_str']}</span></div>
         </div>
         <div class="modal-progress"><div class="prog-track" style="height:10px" title="{prog_tooltip}"><div class="prog-fill {p['prog_cls']}" style="width:{p['prog_val']:.1f}%"></div></div></div>
