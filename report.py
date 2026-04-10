@@ -316,6 +316,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             adx_dir_v = sr.get("adx_dir", 0)
             adx_dir_cls = "positive" if adx_dir_v > 0 else ("neg" if adx_dir_v < -1 else "muted")
             r2_v = sr.get("r2", 0)
+            dc_v = sr.get("dc", 1)
 
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
@@ -323,6 +324,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
                 <td class="{score_cls}"><b>{dt_score:.0f}</b></td>
                 <td class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
+                <td class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
                 <td class="{adx_dir_cls}">{adx_dir_v:+.1f}</td>
                 <td class="{slope_cls}">{slope_v:+.3f}</td>
                 <td class="{roc_cls}">{roc_v:+.2f}</td>
@@ -353,6 +355,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">Score</span><span class="{score_cls}"><b>{dt_score:.0f}</b></span></div>
             <div class="modal-stat"><span class="label">R²</span><span class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</span></div>
+            <div class="modal-stat"><span class="label">DC</span><span class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</span></div>
             <div class="modal-stat"><span class="label">ADX dir</span><span class="{adx_dir_cls}">{adx_dir_v:+.1f}</span></div>
             <div class="modal-stat"><span class="label">Slope</span><span class="{slope_cls}">{slope_v:+.3f}</span></div>
             <div class="modal-stat"><span class="label">ROC</span><span class="{roc_cls}">{roc_v:+.2f}</span></div>
@@ -415,6 +418,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Symbol</th>
             <th class="strategy-active">Score</th>
             <th>R²</th>
+            <th>DC</th>
             <th>ADX dir</th>
             <th>Slope</th>
             <th>ROC</th>

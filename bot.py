@@ -215,7 +215,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         marker = "🎯" if score >= min_score else "  "
         logger.info(
             f"  {marker} {sr['symbol'].split(':')[0]}: "
-            f"score={score:.0f} R²={sr.get('r2',0):.2f} RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
+            f"score={score:.0f} R²={sr.get('r2',0):.2f} DC={sr.get('dc',0):.2f} RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
             f"ADXdir={sr.get('adx_dir',0):+.1f} slope={sr.get('slope',0):+.3f} "
             f"ROC={sr.get('roc_w',0):+.2f} EMA={sr.get('ema_gap',0):+.3f}"
         )

@@ -116,15 +116,36 @@ def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
     return (ema_s - ema_f) / price * 100 if price != 0 else 0.0
 
 
+def _drop_concentration(df: pd.DataFrame, period: int = 30, top_n: int = 3) -> float:
+    """
+    What fraction of total price drop is concentrated in top-N biggest candles.
+    Returns 0-1: 0 = evenly distributed or small drop, 1 = large drop in N candles.
+    Only meaningful for drops > 5% — small declines naturally concentrate.
+    """
+    closes = df["close"].iloc[-period:].values
+    if len(closes) < 2:
+        return 0.0
+    total_move = closes[-1] - closes[0]
+    total_pct = total_move / closes[0] * 100 if closes[0] != 0 else 0
+    if total_pct >= -5.0:
+        return 0.0  # Drop < 5% — too small for concentration to matter
+    changes = np.diff(closes)
+    top_drops = np.sort(changes)[:top_n]
+    top_sum = top_drops.sum()
+    conc = top_sum / total_move if total_move != 0 else 0.0
+    return float(np.clip(conc, 0.0, 1.0))
+
+
 def calculate_downtrend_components(df: pd.DataFrame) -> dict:
     """Calculate raw downtrend components for a single symbol."""
     adx_dir, adx, di_plus, di_minus = _adx_directional(df)
     slope, r2 = _slope_and_r2(df)
     roc_w = _roc_weighted(df)
     ema_g = _ema_gap(df)
+    dc = _drop_concentration(df)
     return {
         "adx_dir": adx_dir, "adx": adx, "di_plus": di_plus, "di_minus": di_minus,
-        "slope": slope, "roc_w": roc_w, "ema_gap": ema_g, "r2": r2,
+        "slope": slope, "roc_w": roc_w, "ema_gap": ema_g, "r2": r2, "dc": dc,
     }
 
 
@@ -155,9 +176,13 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         r["n_roc"] = round(n_roc[i], 1)
         r["n_ema"] = round(n_ema[i], 1)
         raw_score = 0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i]
-        # R² multiplier: penalizes flash crashes, rewards smooth trends
+        # Quality multiplier: R² (trend smoothness) × DC penalty (drop distribution)
+        # DC penalty only kicks in above 0.5: dc=0.5→no penalty, dc=1.0→score halved
         r2 = r.get("r2", 1.0)
-        r["downtrend_score"] = round(raw_score * r2, 1)
+        dc = r.get("dc", 0.0)
+        dc_penalty = 1.0 - max(0.0, dc - 0.5) * 2.0  # 1.0 at dc≤0.5, 0.0 at dc=1.0
+        quality = r2 * max(0.1, dc_penalty)  # floor 0.1 to never fully zero
+        r["downtrend_score"] = round(raw_score * quality, 1)
 
 
 def analyze_symbol(df: pd.DataFrame, config: dict) -> dict:
