@@ -229,7 +229,6 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         scan_results.sort(key=lambda c: c.get("downtrend_score", 0), reverse=True)
     else:
         scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
-    scan_results = scan_results[:20]  # Top 20
 
     logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
     for sr in scan_results:
