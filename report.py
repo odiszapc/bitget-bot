@@ -1401,21 +1401,6 @@ function updateExposure(sel, leverage) {{
     var netRoi = margin > 0 ? (net / margin * 100) : 0;
     var netCls = net >= 0 ? "#3fb950" : "#f85149";
 
-    // TP tick distance warning
-    // Approximate: use notional/margin to get ~price, then calc ticks
-    var approxPrice = notional > 0 ? tick * Math.round(notional / margin / tick) * margin / lev : 0;
-    // Simpler: tp_distance in price = price * tpPriceChg, ticks = tp_distance / tick
-    // We don't have exact price here, but we can estimate from the scan data attribute
-    var tpTicks = bd.closest(".modal-content") ?
-        parseFloat((bd.closest(".modal-content").querySelector("[data-v]") || {{}}).getAttribute("data-v")) : 999;
-    // Better: calculate from tick and margin
-    // price ≈ notional / contracts, but we don't have contracts
-    // Simplest: show tick size and let the breakdown warn
-    var tickWarn = "";
-    // Use ratio: tp_price_change% vs tick/price → tick is data-tick, price unknown in JS
-    // Just show tick info as context
-    var tickInfo = "tick=" + tick;
-
     function R(label, val, formula) {{
         return '<div class="tb-row"><span class="tb-label">' + label + '</span><span class="tb-val">' + val + (formula ? ' <small style="color:#30363d">' + formula + '</small>' : '') + '</span></div>';
     }}
