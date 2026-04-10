@@ -278,28 +278,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     if cycle_info and cycle_info.get("scan_results"):
         sr_list = cycle_info["scan_results"]
         min_signals = 3
-        act_strat = cycle_info.get("active_strategy", "volume")
         chart_map = cycle_info.get("chart_map", {})
 
         scan_rows = ""
         modals = ""
         for idx, sr in enumerate(sr_list):
             dt_val = sr.get("downtrend_score", 0)
-            if act_strat == "composite":
-                if dt_val >= 70:
-                    row_class = "best-candidate" if idx == 0 else "scan-hot"
-                elif dt_val >= 40:
-                    row_class = ""
-                else:
-                    row_class = "scan-dim"
+            if dt_val >= 70:
+                row_class = "best-candidate" if idx == 0 else "scan-hot"
+            elif dt_val >= 40:
+                row_class = ""
             else:
-                sc = sr["signal_count"]
-                if sc >= 3:
-                    row_class = "best-candidate" if idx == 0 else "scan-hot"
-                elif sc >= 1:
-                    row_class = ""
-                else:
-                    row_class = "scan-dim"
+                row_class = "scan-dim"
 
             base, quote = _format_symbol(sr["symbol"])
             fr = sr.get("funding_rate", 0)
@@ -381,12 +371,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 if src:
                     chart_imgs += f'<div class="modal-chart"><div class="modal-chart-label">{tf_label}</div><img src="{_esc(src)}?t={cache_bust}" alt="{_esc(base)} {tf_label}"></div>\n'
 
-            # Strategy details for modal
-            classic_data = sr.get("classic", {})
-            volume_data = sr.get("volume", {})
-            c_sigs = ", ".join(classic_data.get("signals", [])) or "-"
-            v_sigs = ", ".join(volume_data.get("signals", [])) or "-"
-
             modals += f"""
 <div class="modal-overlay" id="{modal_id}" onclick="if(event.target===this)this.style.display='none'">
     <div class="modal-content">
@@ -408,12 +392,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">+DI</span><span>{sr.get('di_plus', 0):.0f}</span></div>
             <div class="modal-stat"><span class="label">-DI</span><span>{sr.get('di_minus', 0):.0f}</span></div>
             <div class="modal-stat"><span class="label">Funding</span><span>{fr*100:.4f}%</span></div>
-            <div class="modal-stat"><span class="label">Classic</span><span>{classic_data.get('signal_count',0)}/{classic_data.get('max_signals',4)}</span></div>
-            <div class="modal-stat"><span class="label">Volume</span><span>{volume_data.get('signal_count',0)}/{volume_data.get('max_signals',4)}</span></div>
-        </div>
-        <div class="modal-signals">
-            <div><small>Classic:</small> {_esc(c_sigs)}</div>
-            <div><small>Volume:</small> {_esc(v_sigs)}</div>
         </div>
         <div class="modal-trade-row">
             <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">OPEN SHORT</button>
@@ -456,13 +434,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         modal_html = modals
 
         scan_section = f"""
-<h2>Market Scan ({len(sr_list)} pairs) &mdash; Strategy: {_esc(act_strat)}</h2>
+<h2>Market Scan ({len(sr_list)} pairs)</h2>
 <div class="table-wrap">
 <table>
     <thead>
         <tr>
             <th>Symbol</th>
-            <th{"" if act_strat != "composite" else ' class="strategy-active"'}>Score</th>
+            <th class="strategy-active">Score</th>
             <th>ADX dir</th>
             <th>Slope</th>
             <th>ROC</th>

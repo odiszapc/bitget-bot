@@ -7,7 +7,7 @@ import json
 import logging
 from flask import Flask, request, jsonify
 from exchange import Exchange
-from strategy import candles_to_dataframe, calculate_atr  # kept for potential future use
+
 from state import load_state, add_position, sync_positions_with_exchange
 from positions import build_position_data
 

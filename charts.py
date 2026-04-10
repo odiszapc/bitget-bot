@@ -123,7 +123,8 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
     chart_map = {}
     symbols = [sr["symbol"] for sr in scan_results[:20]]
 
-    for symbol in symbols:
+    for cidx, symbol in enumerate(symbols):
+        short_name = symbol.split("/")[0].split(":")[0]
         chart_map[symbol] = {}
         for tf in TIMEFRAMES:
             candles = exchange.get_ohlcv(symbol, tf, limit=CANDLE_LIMIT)
@@ -134,8 +135,9 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
             filename = generate_chart(closes, symbol, tf, overlap_candles=overlap)
             if filename:
                 chart_map[symbol][tf] = filename
+        logger.info(f"  [{cidx + 1}/{len(symbols)}] {short_name} — {len(chart_map[symbol])} charts")
 
     generated = sum(len(v) for v in chart_map.values())
-    logger.info(f"Generated {generated} charts for {len(symbols)} symbols")
+    logger.info(f"Charts done: {generated} charts for {len(symbols)} symbols")
 
     return chart_map

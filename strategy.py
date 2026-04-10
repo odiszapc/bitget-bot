@@ -1,5 +1,5 @@
 """
-Strategy module: technical indicators, filtering, and signal generation.
+Strategy module: technical indicators, filtering, and composite downtrend scoring.
 """
 
 import numpy as np
@@ -57,7 +57,6 @@ def calculate_ema_cross(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> bool
     if len(fast_values) < 3:
         return False
 
-    # Current: fast below slow. Previous: fast above or equal to slow
     current_fast = fast_values.iloc[-1]
     current_slow = slow_values.iloc[-1]
     prev_fast = fast_values.iloc[-2]
@@ -65,116 +64,13 @@ def calculate_ema_cross(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> bool
     prev2_fast = fast_values.iloc[-3]
     prev2_slow = slow_values.iloc[-3]
 
-    # Cross happened in last 1-2 candles
     cross_now = current_fast < current_slow and prev_fast >= prev_slow
     cross_prev = prev_fast < prev_slow and prev2_fast >= prev2_slow
 
     return cross_now or cross_prev
 
 
-def calculate_macd_cross(df: pd.DataFrame) -> bool:
-    """
-    Check if MACD line crossed below signal line (bearish).
-    Returns True if crossover happened in the last 2 candles.
-    """
-    macd = ta.trend.MACD(close=df["close"])
-    macd_line = macd.macd()
-    signal_line = macd.macd_signal()
-
-    if len(macd_line) < 3:
-        return False
-
-    # Current: MACD below signal. Previous: MACD above or equal
-    cross_now = (
-        macd_line.iloc[-1] < signal_line.iloc[-1]
-        and macd_line.iloc[-2] >= signal_line.iloc[-2]
-    )
-    cross_prev = (
-        macd_line.iloc[-2] < signal_line.iloc[-2]
-        and macd_line.iloc[-3] >= signal_line.iloc[-3]
-    )
-
-    return cross_now or cross_prev
-
-
-def calculate_volume_spike(df: pd.DataFrame, lookback: int = 20, multiplier: float = 1.5) -> bool:
-    """Check if current volume is significantly above recent average."""
-    if len(df) < lookback + 1:
-        return False
-    avg_volume = df["volume"].iloc[-(lookback + 1):-1].mean()
-    current_volume = df["volume"].iloc[-1]
-    if avg_volume <= 0:
-        return False
-    return current_volume > multiplier * avg_volume
-
-
-# ── Strategy functions ──────────────────────────────────────
-
-def analyze_classic(
-    df: pd.DataFrame, funding_rate: float | None, config: dict
-) -> dict:
-    """Classic strategy: RSI>70, EMA_CROSS, MACD_CROSS, FUNDING (3 of 4)."""
-    result = {"signals": [], "signal_count": 0, "max_signals": 4,
-              "rsi": 0.0, "atr_pct": 0.0, "details": []}
-
-    rsi = calculate_rsi(df)
-    result["rsi"] = rsi
-    if rsi > 70:
-        result["signals"].append("RSI")
-        result["details"].append(f"RSI={rsi:.1f} (>70)")
-
-    if calculate_ema_cross(df):
-        result["signals"].append("EMA_CROSS")
-        result["details"].append("EMA(9)<EMA(21)")
-
-    if calculate_macd_cross(df):
-        result["signals"].append("MACD_CROSS")
-        result["details"].append("MACD bearish cross")
-
-    if funding_rate is not None and funding_rate > 0.0001:
-        result["signals"].append("FUNDING")
-        result["details"].append(f"FR={funding_rate*100:.4f}%")
-
-    result["atr_pct"] = calculate_atr(df)
-    result["signal_count"] = len(result["signals"])
-    return result
-
-
-def analyze_volume(
-    df: pd.DataFrame, funding_rate: float | None, config: dict
-) -> dict:
-    """Volume strategy: EMA_CROSS alone is enough, OR 3 of 4 signals."""
-    result = {"signals": [], "signal_count": 0, "max_signals": 4,
-              "rsi": 0.0, "atr_pct": 0.0, "details": []}
-
-    rsi = calculate_rsi(df)
-    result["rsi"] = rsi
-    if rsi > 65:
-        result["signals"].append("RSI")
-        result["details"].append(f"RSI={rsi:.1f} (>65)")
-
-    has_ema_cross = calculate_ema_cross(df)
-    if has_ema_cross:
-        result["signals"].append("EMA_CROSS")
-        result["details"].append("EMA(9)<EMA(21)")
-
-    if calculate_volume_spike(df):
-        result["signals"].append("VOL_SPIKE")
-        result["details"].append("Volume >1.5x avg")
-
-    if funding_rate is not None and funding_rate > 0.0001:
-        result["signals"].append("FUNDING")
-        result["details"].append(f"FR={funding_rate*100:.4f}%")
-
-    result["atr_pct"] = calculate_atr(df)
-    actual_count = len(result["signals"])
-    # EMA_CROSS alone is a sufficient signal — treat as 3/4
-    if has_ema_cross and actual_count < 3:
-        result["signal_count"] = 3
-    else:
-        result["signal_count"] = actual_count
-    return result
-
+# ── Composite downtrend strategy ──────────────────────────────
 
 def _adx_directional(df: pd.DataFrame, period: int = 14) -> tuple[float, float, float, float]:
     """Returns (directional_score, adx, di_plus, di_minus)."""
@@ -257,93 +153,17 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         )
 
 
-def analyze_composite(
-    df: pd.DataFrame, funding_rate: float | None, config: dict
-) -> dict:
-    """
-    Composite downtrend strategy.
-    Entry criteria: downtrend_score >= 70 (set after normalization in bot.py).
-    Raw components stored for normalization across all symbols.
-    """
-    result = {"signals": [], "signal_count": 0, "max_signals": 100,
-              "rsi": 0.0, "atr_pct": 0.0, "details": []}
-
+def analyze_symbol(df: pd.DataFrame, config: dict) -> dict:
+    """Analyze a single symbol: RSI, ATR, and composite downtrend components."""
     rsi = calculate_rsi(df)
-    result["rsi"] = rsi
-    result["atr_pct"] = calculate_atr(df)
-
-    # Store raw components — score computed after normalization
-    components = calculate_downtrend_components(df)
-    result.update(components)
-    result["downtrend_score"] = 0  # placeholder, set by normalize_downtrend_scores
-
-    return result
-
-
-STRATEGIES = {
-    "classic": analyze_classic,
-    "volume": analyze_volume,
-    "composite": analyze_composite,
-}
-
-
-def analyze_all_strategies(
-    df: pd.DataFrame, funding_rate: float | None, config: dict
-) -> dict[str, dict]:
-    """Run all strategies on a symbol. Returns {name: result_dict}."""
-    return {name: fn(df, funding_rate, config) for name, fn in STRATEGIES.items()}
-
-
-def analyze_symbol(
-    df: pd.DataFrame, funding_rate: Optional[float], config: dict
-) -> dict:
-    """
-    Analyze a single symbol and return signal details.
-
-    Returns dict with:
-      - signals: list of triggered signal names
-      - signal_count: number of signals triggered
-      - rsi: current RSI value
-      - atr_pct: ATR as percentage
-      - details: human-readable details
-    """
-    result = {
-        "signals": [],
-        "signal_count": 0,
-        "rsi": 0.0,
-        "atr_pct": 0.0,
-        "details": [],
-    }
-
-    # RSI
-    rsi = calculate_rsi(df)
-    result["rsi"] = rsi
-    if rsi > 70:
-        result["signals"].append("RSI")
-        result["details"].append(f"RSI={rsi:.1f} (>70, overbought)")
-
-    # EMA crossover
-    if calculate_ema_cross(df):
-        result["signals"].append("EMA_CROSS")
-        result["details"].append("EMA(9) crossed below EMA(21)")
-
-    # MACD crossover
-    if calculate_macd_cross(df):
-        result["signals"].append("MACD_CROSS")
-        result["details"].append("MACD bearish crossover")
-
-    # Funding rate
-    if funding_rate is not None and funding_rate > 0.0001:  # 0.01%
-        result["signals"].append("FUNDING")
-        result["details"].append(f"Funding rate={funding_rate*100:.4f}% (>0.01%)")
-
-    # ATR
     atr_pct = calculate_atr(df)
-    result["atr_pct"] = atr_pct
-
-    result["signal_count"] = len(result["signals"])
-
-    return result
+    components = calculate_downtrend_components(df)
+    return {
+        "rsi": rsi,
+        "atr_pct": atr_pct,
+        **components,
+        "downtrend_score": 0,  # placeholder, set by normalize_downtrend_scores
+    }
 
 
 def calculate_sl_tp(
@@ -369,13 +189,3 @@ def calculate_sl_tp(
     take_profit_price = entry_price * (1 - tp_pct / 100)
 
     return round(stop_loss_price, 8), round(take_profit_price, 8)
-
-
-def filter_by_volume(tickers: dict, min_volume_usd: float) -> list[str]:
-    """Filter symbols by 24h volume."""
-    filtered = []
-    for symbol, ticker in tickers.items():
-        quote_volume = ticker.get("quoteVolume", 0)
-        if quote_volume and float(quote_volume) >= min_volume_usd:
-            filtered.append(symbol)
-    return filtered

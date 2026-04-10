@@ -20,11 +20,9 @@ from exchange import Exchange
 from strategy import (
     candles_to_dataframe,
     calculate_atr,
-    analyze_all_strategies,
+    analyze_symbol,
     normalize_downtrend_scores,
-    STRATEGIES,
     calculate_sl_tp,
-    filter_by_volume,
 )
 from risk import RiskManager
 from state import (
@@ -134,13 +132,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     timeframe = config.get("timeframe", "15m")
     min_volume = config.get("min_volume_usd", 5_000_000)
     max_atr = config.get("max_atr_pct", 15.0)
-    min_signals = config.get("min_signals", 3)
-
-    active_strategy = config.get("signal_strategy", "volume")
-    if active_strategy not in STRATEGIES:
-        logger.warning(f"Unknown signal_strategy '{active_strategy}', falling back to 'volume'")
-        active_strategy = "volume"
-    logger.info(f"Active strategy: {active_strategy}")
+    active_strategy = "composite"
 
     scan_results = []
     symbols = exchange.get_usdt_futures_symbols()
@@ -203,64 +195,37 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             if avg_vol > 0:
                 volume_ratios.append(cur_vol / avg_vol)
 
-        funding_rate = exchange.get_funding_rate(symbol) if active_strategy != "composite" else None
-        all_analysis = analyze_all_strategies(df, funding_rate, config)
-        active = all_analysis[active_strategy]
+        analysis = analyze_symbol(df, config)
 
-        calls_used = exchange.api_call_count - calls_before
-        elapsed = (time.time() - t_start) * 1000
-        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name} — {calls_used} calls, {elapsed:.0f}ms")
+        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name}")
 
         # Get 24h volume from tickers
         ticker_data = tickers.get(symbol, {})
         quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)
 
-        # Flatten composite components to top level for normalization
-        comp = all_analysis.get("composite", {})
         scan_results.append({
             "symbol": symbol,
-            "rsi": active["rsi"],
-            "atr_pct": atr_pct,
-            "funding_rate": funding_rate or 0,
             "volume_24h": quote_volume,
-            "signal_count": active["signal_count"],
-            "signals": active["signals"],
-            "details": active["details"],
-            "adx_dir": comp.get("adx_dir", 0),
-            "adx": comp.get("adx", 0),
-            "di_plus": comp.get("di_plus", 0),
-            "di_minus": comp.get("di_minus", 0),
-            "slope": comp.get("slope", 0),
-            "roc_w": comp.get("roc_w", 0),
-            "ema_gap": comp.get("ema_gap", 0),
-            **{name: result for name, result in all_analysis.items()},
+            "funding_rate": 0,
+            **analysis,
         })
 
 
     # ── Step 7: Normalize composite scores and sort ──
     logger.info(f"Analysis done: {len(scan_results)} passed, {skipped_data} no data, {skipped_atr} high ATR")
     normalize_downtrend_scores(scan_results)
+    scan_results.sort(key=lambda c: c.get("downtrend_score", 0), reverse=True)
 
-    if active_strategy == "composite":
-        scan_results.sort(key=lambda c: c.get("downtrend_score", 0), reverse=True)
-    else:
-        scan_results.sort(key=lambda c: (c["signal_count"], c["rsi"]), reverse=True)
-
-    logger.info(f"Market scan: {len(scan_results)} pairs (strategy: {active_strategy})")
+    min_score = config.get("min_downtrend_score", 70)
+    logger.info(f"Ranked {len(scan_results)} pairs by downtrend score")
     for sr in scan_results:
-        parts = []
-        for name in STRATEGIES:
-            s = sr.get(name, {})
-            cnt = s.get("signal_count", 0)
-            mx = s.get("max_signals", 4)
-            sigs = ",".join(s.get("signals", []))
-            marker = "*" if name == active_strategy else " "
-            parts.append(f"{marker}{name}={cnt}/{mx}[{sigs}]")
+        score = sr.get("downtrend_score", 0)
+        marker = "🎯" if score >= min_score else "  "
         logger.info(
-            f"  {'🎯' if sr['signal_count'] >= min_signals else '  '} "
-            f"{sr['symbol'].split(':')[0]}: {' '.join(parts)} "
-            f"RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
-            f"FR={sr['funding_rate']*100:.4f}%"
+            f"  {marker} {sr['symbol'].split(':')[0]}: "
+            f"score={score:.0f} RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
+            f"ADXdir={sr.get('adx_dir',0):+.1f} slope={sr.get('slope',0):+.3f} "
+            f"ROC={sr.get('roc_w',0):+.2f} EMA={sr.get('ema_gap',0):+.3f}"
         )
 
     # ── Step 7b: Fetch OI for top pairs and run market checks ──
@@ -268,8 +233,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     if "oi_snapshots" not in state:
         state["oi_snapshots"] = {}
 
-    for sr in scan_results:
+    oi_pairs = scan_results[:20]
+    logger.info(f"Fetching OI for top {len(oi_pairs)} pairs...")
+    for oi_idx, sr in enumerate(oi_pairs):
         symbol = sr["symbol"]
+        short_name = symbol.split("/")[0].split(":")[0]
         oi = exchange.get_open_interest(symbol)
         if oi and oi["value"] > 0:
             prev = state["oi_snapshots"].get(symbol)
@@ -284,7 +252,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
                 "value": oi["value"],
                 "timestamp": time.time(),
             }
-        time.sleep(0.1)
+        logger.info(f"  [{oi_idx + 1}/{len(oi_pairs)}] {short_name} OI")
 
     market_volume_ratio = (
         sum(volume_ratios) / len(volume_ratios) if volume_ratios else 1.0
@@ -306,17 +274,14 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # ── Step 7c: Generate charts for top pairs ──
     chart_map = {}
     if config.get("charts_enabled", False):
+        logger.info("Generating charts for top 20 pairs...")
         try:
             chart_map = generate_charts_for_symbols(exchange, scan_results)
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
 
     # ── Step 8: Execute trade (only if safe) ──
-    min_score = config.get("min_downtrend_score", 70)
-    if active_strategy == "composite":
-        candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]
-    else:
-        candidates = [s for s in scan_results if s["signal_count"] >= min_signals and s["symbol"] not in open_position_symbols]
+    candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]
     outcome = ""
 
     if not all_safe:
