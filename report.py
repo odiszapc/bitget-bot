@@ -188,22 +188,19 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         now_utc = datetime.now(timezone.utc)
         shorts_rows = ""
 
-        # Open positions first (sorted newest → oldest)
+        # Open positions first (sorted newest → oldest), aligned with closed shorts
         open_sorted = sorted(pos_data, key=lambda p: p.get("opened_ts", 0), reverse=True)
-        # Calculate running balance: accumulate from oldest to newest, then display newest first
-        open_by_oldest = sorted(pos_data, key=lambda p: p.get("opened_ts", 0))
-        running = current_balance
-        bal_map = {}
-        for op in open_by_oldest:
-            running += op["unrealized_pnl"]
-            bal_map[op["symbol"]] = running
         for op in open_sorted:
             sym = _esc(op["base"])
+            entry_p = op["entry_price"]
+            fee = op.get("deducted_fee", 0)
             pnl = op["unrealized_pnl"]
-            bal_str = f"{bal_map.get(op['symbol'], current_balance):.2f}"
-            delta_str = f"{pnl:+.2f}"
-            delta_cls = "positive" if pnl >= 0 else "negative"
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-bal close-bal-open">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
+            # Potential net = unrealized PnL - open fee - estimated close fee
+            close_fee_est = abs(op.get("margin", 0) * op.get("leverage", 10) * 0.001)
+            potential_net = pnl - fee - close_fee_est
+            net_cls = "positive" if potential_net >= 0 else "negative"
+            pp = op.get("price_precision", 4)
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
         # Closed shorts with entry/exit/fees/net
         prev_bal = None
@@ -1665,20 +1662,25 @@ function refreshShorts() {{
 
         // Open positions: sort newest first, calculate running balance from oldest
         var sorted = positions.slice().sort(function(a,b) {{ return (a.opened_ts||0) - (b.opened_ts||0); }});
-        var runBal = balance;
-        var balMap = {{}};
-        for (var k = 0; k < sorted.length; k++) {{
-            runBal += sorted[k].unrealized_pnl;
-            balMap[sorted[k].symbol] = runBal;
-        }}
         // Display newest first
         var newest = positions.slice().sort(function(a,b) {{ return (b.opened_ts||0) - (a.opened_ts||0); }});
         for (var i = 0; i < newest.length; i++) {{
             var p = newest[i];
-            var bVal = (balMap[p.symbol] || balance).toFixed(2);
-            var cls = p.unrealized_pnl >= 0 ? "positive" : "negative";
-            var delta = (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(2);
-            html += '<div class="close-row close-open"><span class="close-sym">' + p.base + ' <span class="pos-dot"></span></span><span class="close-bal close-bal-open">' + bVal + '</span><span class="close-delta ' + cls + '">' + delta + '</span><span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
+            var ep = p.entry_price || 0;
+            var fee = p.deducted_fee || 0;
+            var closeFeeEst = Math.abs((p.margin || 0) * (p.leverage || 10) * 0.001);
+            var potNet = (p.unrealized_pnl || 0) - fee - closeFeeEst;
+            var netCls = potNet >= 0 ? "positive" : "negative";
+            var pp = p.price_precision || 4;
+            html += '<div class="close-row close-open">' +
+                '<span class="close-sym">' + p.base + ' <span class="pos-dot"></span></span>' +
+                '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
+                '<span class="close-price muted">\u2014</span>' +
+                '<span class="close-fee">' + fee.toFixed(3) + '</span>' +
+                '<span class="close-delta ' + netCls + '">' + (potNet >= 0 ? "+" : "") + potNet.toFixed(3) + '</span>' +
+                '<span class="close-bal close-bal-open">' + balance.toFixed(2) + '</span>' +
+                '<span class="close-delta muted">\u2014</span>' +
+                '<span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
         }}
 
         // Closed shorts
