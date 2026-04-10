@@ -395,10 +395,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     <option value="10">10%</option>
                 </select>
             </div>
-            <div class="trade-info">
-                <span class="label">Estimate</span>
-                <span class="fee-estimate" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001">—</span>
-            </div>
+        </div>
+        <div class="trade-breakdown" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001">
         </div>
         <div class="modal-actions">
             <div class="short-result"></div>
@@ -1023,23 +1021,34 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         gap: 4px;
         margin-left: auto;
     }}
-    .trade-info {{
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin-left: auto;
-    }}
-    .trade-info .label {{
-        font-size: 10px;
+    .trade-breakdown {{
+        font-size: 12px;
         color: #6e7681;
-        text-transform: uppercase;
-        font-weight: 600;
-        letter-spacing: 0.5px;
+        padding: 8px 14px;
+        margin-bottom: 8px;
+        line-height: 1.7;
+        border-top: 1px solid #21262d;
     }}
-    .fee-estimate {{
+    .trade-breakdown .tb-row {{
+        display: flex;
+        justify-content: space-between;
+    }}
+    .trade-breakdown .tb-label {{
+        color: #6e7681;
+    }}
+    .trade-breakdown .tb-val {{
+        color: #8b949e;
+        font-family: inherit;
+    }}
+    .trade-breakdown .tb-result {{
+        border-top: 1px solid #30363d;
+        padding-top: 4px;
+        margin-top: 2px;
+        font-weight: 700;
         font-size: 13px;
-        color: #d29922;
-        font-weight: 600;
+    }}
+    .trade-breakdown .tb-result .tb-val {{
+        color: #c9d1d9;
     }}
     .exposure-value {{
         font-size: 13px;
@@ -1348,42 +1357,54 @@ document.addEventListener("keydown", function(e) {{
     }}
 }});
 
-// Open modal and init fee calculation
+// Open modal and init breakdown
 function openModal(id) {{
     var modal = document.getElementById(id);
     modal.style.display = "flex";
     var sel = modal.querySelector(".bet-pct-select");
     if (sel) {{
-        var lev = parseFloat((modal.querySelector(".fee-estimate") || {{}}).getAttribute("data-lev")) || 10;
+        var bd = modal.querySelector(".trade-breakdown");
+        var lev = bd ? parseFloat(bd.getAttribute("data-lev")) || 10 : 10;
         updateExposure(sel, lev);
     }}
 }}
 
-// Update fee + profit estimate when bet/tp changes
+// Update trade breakdown when bet/tp changes
 function updateExposure(sel, leverage) {{
     var row = sel.closest(".modal-trade-row");
+    var bd = row.parentElement.querySelector(".trade-breakdown") || row.nextElementSibling;
+    if (!bd || !bd.classList.contains("trade-breakdown")) return;
     var betPct = parseInt(row.querySelector(".bet-pct-select").value);
     var tpRoi = parseFloat(row.querySelector(".tp-roi-select").value);
-    var feeEl = row.querySelector(".fee-estimate");
-    if (feeEl) {{
-        var bal = parseFloat(feeEl.getAttribute("data-bal")) || 0;
-        var lev = parseFloat(feeEl.getAttribute("data-lev")) || 10;
-        var rate = parseFloat(feeEl.getAttribute("data-rate")) || 0.001;
-        var margin = bal * betPct / 100;
-        var notional = margin * lev;
-        var tpPriceChg = tpRoi / lev / 100;
-        var openFee = notional * rate;
-        var closeNotional = notional * (1 - tpPriceChg);
-        var closeFee = closeNotional * rate;
-        var gross = notional * tpPriceChg;
-        var net = gross - openFee - closeFee;
-        var netRoi = margin > 0 ? (net / margin * 100) : 0;
-        var netCls = net >= 0 ? "color:#3fb950" : "color:#f85149";
-        feeEl.innerHTML = "Fee: " + (openFee + closeFee).toFixed(2) +
-            " &middot; Net: <span style='" + netCls + ";font-weight:700'>" +
-            (net >= 0 ? "+" : "") + net.toFixed(2) + " USDT (" +
-            (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span>";
+    var bal = parseFloat(bd.getAttribute("data-bal")) || 0;
+    var lev = parseFloat(bd.getAttribute("data-lev")) || 10;
+    var rate = parseFloat(bd.getAttribute("data-rate")) || 0.001;
+
+    var margin = bal * betPct / 100;
+    var notional = margin * lev;
+    var tpPriceChg = tpRoi / lev / 100;
+    var openFee = notional * rate;
+    var gross = notional * tpPriceChg;
+    var closeNotional = notional - gross;
+    var closeFee = closeNotional * rate;
+    var totalFee = openFee + closeFee;
+    var net = gross - totalFee;
+    var netRoi = margin > 0 ? (net / margin * 100) : 0;
+    var netCls = net >= 0 ? "#3fb950" : "#f85149";
+
+    function R(label, val, formula) {{
+        return '<div class="tb-row"><span class="tb-label">' + label + '</span><span class="tb-val">' + val + (formula ? ' <small style="color:#30363d">' + formula + '</small>' : '') + '</span></div>';
     }}
+
+    bd.innerHTML =
+        R("Margin", margin.toFixed(2) + " USDT", bal.toFixed(1) + " × " + betPct + "%") +
+        R("Position", notional.toFixed(2) + " USDT", margin.toFixed(2) + " × " + lev + "x") +
+        R("Open fee", openFee.toFixed(4) + " USDT", notional.toFixed(2) + " × " + (rate*100).toFixed(1) + "%") +
+        R("Gross profit", gross.toFixed(4) + " USDT", notional.toFixed(2) + " × " + (tpPriceChg*100).toFixed(2) + "%") +
+        R("Close fee", closeFee.toFixed(4) + " USDT", closeNotional.toFixed(2) + " × " + (rate*100).toFixed(1) + "%") +
+        R("Total fees", totalFee.toFixed(4) + " USDT", openFee.toFixed(4) + " + " + closeFee.toFixed(4)) +
+        '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' +
+        (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span></div>";
 }}
 
 // Manual SHORT button
