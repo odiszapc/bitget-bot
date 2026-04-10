@@ -29,24 +29,43 @@ Single score 0-100 ranking how strongly a pair is trending down:
 **Formula:** `score = raw_score * effective_r2 * dc_penalty`
 
 ### Entry Criteria (auto-trade)
-- `downtrend_score >= min_downtrend_score` (default 70, configurable)
+- Highest `downtrend_score >= min_downtrend_score` (default 70)
+- `risk_score <= max_risk_score` (default 3)
 - No existing position on that symbol
-- All safety checks passed
+- All safety checks passed (BTC trend, position count)
+
+### Risk Score (0-10)
+Based on **days since price was last above liquidation level** (from 90 daily candles):
+- 1-3 days ago → 10 (extreme risk)
+- 4-14 days → 5
+- 15-30 days → 4
+- 31-60 days → 3
+- 61-90 days → 2
+- Never in 90d → 1 (safest)
+
+Uses approximate liquidation price: `liq = (free_balance + notional) / (contracts * (1 + keepMarginRate))`
+`keepMarginRate` varies per pair (0.4% BTC — 5% PHB), fetched from leverage tiers.
 
 ### Timeframe
 - 15-minute candles (configurable)
 - Bot runs main cycle every 5 minutes (configurable)
 
 ### Position Sizing
-- Max simultaneous positions: configurable (`max_positions`)
+- Max simultaneous positions: 3 (configurable via `max_positions`)
 - Each position: `balance * position_size_pct / max_positions`
 - Leverage: 10x (configurable)
 - Margin mode: Cross
 
-### Take-Profit
-- **Auto trades**: Hybrid ATR — `max(min_tp_pct, 0.1 * ATR)`
-- **Manual trades**: User selects TP ROI (1/2/3/4/5/10%), TP calculated as `entry * (1 - ROI/leverage/100)`
-- **Tick safety**: if TP rounds to entry price, forced to `entry - tick_size`
+### Take-Profit (two-API-call flow)
+Both auto and manual trades use the same algorithm:
+1. `open_short_no_tp()` — market order without TP → get real fill price
+2. Calculate TP from **fill price** (not ticker): `fill * (1 - ROI/leverage/100)`
+3. `set_take_profit()` via `PlaceTpslOrder` API → 3 retries on failure
+4. If all retries fail → save to `state["pending_tp"]` → bot recovers next cycle
+
+- **Auto trades**: `auto_tp_roi_pct` (default 3%)
+- **Manual trades**: user selects TP ROI (1/2/3/4/5/10%)
+- **Tick safety**: if TP rounds to fill price, forced to `fill - tick_size`
 
 ### Trailing Stop
 - When position profit reaches trailing_start_pct: move stop to breakeven
@@ -56,30 +75,27 @@ Single score 0-100 ranking how strongly a pair is trending down:
 
 ### Pre-trade checklist (ALL must pass):
 1. BTC 24h change < +5% (bull market protection)
-2. Open positions < max_positions
+2. Open positions < max_positions (default 3)
+3. risk_score <= max_risk_score (default 3, auto-trade only)
 
 ### Tick Size Protection
-- Cheap coins with coarse tick size may have TP = entry after rounding
-- API forces TP to at least `entry - 1 tick` if this happens
+- Cheap coins with coarse tick size may have TP = fill after rounding
+- TP forced to `fill - 1 tick` if this happens
 - Dashboard shows ⚠ warning icon for pairs with < 3 ticks of TP distance
+
+### Pending TP Recovery
+- If TP fails to set (network error, etc.), saved to `state["pending_tp"]`
+- Each bot cycle checks pending_tp: position alive? TP already set? → retry or cleanup
 
 ## Fee Structure
 - Taker rate: 0.1% of notional (account-wide, not per-pair)
 - Open fee: `margin * leverage * 0.001`
 - Close fee: `close_notional * 0.001`
-- Funding fee: every 8h, from `contract_settle_fee` bills
+- Funding fee: every 8h, from `contract_settle_fee` bills (`totalFee` on position)
 - Round-trip at 10x: ~2% ROI breakeven
-- Dashboard shows full fee breakdown before opening manual trades
-- Recent Shorts fee popup shows exact breakdown per trade (from Bitget API)
+- Dashboard shows full P&L breakdown before opening manual trades
+- Recent Shorts fee popup: opening fee, closing fee, funding fee, closing profit, position PnL
 - Bitget reports gross PnL (without fees) — real net = PnL + funding - fees
-
-## Known Issues / TP Slippage Bug
-- `presetStopSurplusPrice` is calculated from `ticker["last"]` but fill may differ
-- For cheap coins (price < 0.1 USDT) with coarse tick (0.0001), TP can round to entry
-- Current mitigation: force TP = entry - tick if tp >= entry
-- Does NOT prevent slippage where fill < ticker (JOE/PHB cases)
-- Proper fix: set TP after fill (variant 2) — not yet implemented
-- Affected trades: JOE (lost 0.59), PHB (lost 0.52) — TP = entry, instant close
 
 ## Architecture
 
@@ -113,24 +129,24 @@ bitget-short-bot/
 
 ### API Endpoints
 - `POST /api/short` — Open manual short (params: symbol, bet_pct, tp_roi_pct)
-- `GET /api/positions` — Live position data for table refresh
-- `GET /api/shorts` — Open positions + recent closed shorts
+- `GET /api/positions` — Live position data with days_since_liq
+- `GET /api/shorts` — Open positions + recent closed shorts with fee breakdown
 
 ### Dashboard Features
 - Auto-refresh Open Positions and Recent Shorts on page load
 - Manual refresh buttons with spinning icon
-- Market Scan table with sortable columns (click header → DESC sort)
+- Market Scan table with sortable columns (per-column sort direction)
 - Component bars visualization (ADX/Slope/ROC/EMA)
+- Risk score, approx liquidation price, Last@Liq columns
 - ⚠ tick precision warning icon with rich tooltip for cheap coins
 - Position modal with charts (1m/15m/1h)
 - Trade modal with bet size, TP ROI selectors, full P&L breakdown with formulas
-- Toast notifications on successful trade
-- Progress bar for open positions (inline in PnL cell, tooltip on hover)
-- Fee, break-even price, margin % display in Open Positions
+- Toast notifications on successful trade (shows fill price, TP, adjusted warning)
+- Progress bar for open positions (inline in PnL cell)
+- Fee, funding fee, break-even price, margin %, Last@Liq in Open Positions
 - Recent Shorts with entry/exit prices, fees, net profit, duration, balance delta
-- Fee breakdown popup on hover: opening fee, closing fee, funding fee, closing profit, position PnL
-- Open positions aligned with closed shorts (same columns)
-- Color coding: red symbol/exit for losing trades, green/red net
+- Fee breakdown popup: closing profit, funding fee, opening fee, closing fee, position PnL
+- Color rules: positive=blue +, negative=red -, zero=grey
 
 ## Tech Stack
 - Python 3.12
@@ -144,12 +160,13 @@ bitget-short-bot/
 ## Configuration (config.json)
 - `api_key`, `api_secret`, `passphrase` — Bitget API credentials
 - `leverage` — default 10
-- `max_positions` — default 5
-- `position_size_pct` — default 50
+- `max_positions` — default 3
+- `position_size_pct` — default 20
 - `timeframe` — default "15m"
 - `max_atr_pct` — default 15.0
-- `min_downtrend_score` — default 70 (auto-trade threshold)
-- `min_stop_pct` — default 2.0
+- `min_downtrend_score` — default 70 (auto-trade score threshold)
+- `max_risk_score` — default 3 (auto-trade risk filter)
+- `auto_tp_roi_pct` — default 3.0 (TP ROI for auto trades)
 - `btc_bull_limit_pct` — default 5.0
 - `cycle_minutes` — default 5
 - `scan_threads` — default 7 (parallel API workers)
@@ -165,12 +182,16 @@ bitget-short-bot/
 - Always test on Bitget demo account first (set `demo: true` in config)
 - The bot is designed to be restarted safely at any time
 - All API calls include error handling and retry logic (3 retries on 429)
+- `create_order` calls log full request and response for debugging
 - Rate limiting: respect Bitget's 20 requests/second limit
 - Scan uses ThreadPoolExecutor for parallel OHLCV fetching (~7 threads)
-- Charts reuse cached 15m candles from scan phase (saves 20 API calls)
+- Charts reuse cached 15m candles from scan phase (150 candles fetched)
 - Charts parallelized with ThreadPoolExecutor (5 threads)
 - Charts generated for union of top-20 per each metric + open positions
+- 90d daily candles fetched for chart symbols to calculate risk score
 - API server caches Exchange instance (load_markets once)
 - TP/SL fetched once during sync, not duplicated in position builder
-- Per-pair scan logging: [N/total] SYMBOL
+- f-string gotcha: ternary inside format spec must be wrapped in nested f""
+- JS in report.py: avoid unicode escapes, use named functions instead of IIFEs
+- CSS specificity: `.close-sym.negative` needed to override `.close-sym { color }`
 - Every time you finish task commit and push automatically
