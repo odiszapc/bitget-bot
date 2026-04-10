@@ -80,6 +80,16 @@ class Exchange:
         """Get minimum price increment for a symbol."""
         return self.exchange.markets.get(symbol, {}).get("precision", {}).get("price", 0.01)
 
+    def get_keep_margin_rate(self, symbol: str) -> float:
+        """Get maintenance margin rate (keepMarginRate) for smallest tier."""
+        try:
+            tiers = self.exchange.fetch_market_leverage_tiers(symbol)
+            if tiers:
+                return float(tiers[0].get("maintenanceMarginRate", 0.01))
+        except Exception:
+            pass
+        return 0.01  # conservative default
+
     def reset_api_counter(self) -> int:
         """Reset counter and return previous value."""
         count = self.api_call_count

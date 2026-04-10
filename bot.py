@@ -218,13 +218,29 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         tp_distance = last_price * (default_roi / leverage / 100)
         tp_ticks = tp_distance / tick_size if tick_size > 0 else 999
 
+        # Approximate liquidation price (cross margin SHORT, default bet=20%)
+        default_bet_pct = config.get("position_size_pct", 20)
+        margin_est = current_balance * default_bet_pct / 100
+        notional_est = margin_est * leverage
+        free_est = current_balance - margin_est
+        kmr = exchange.get_keep_margin_rate(symbol)
+        contracts_est = notional_est / last_price if last_price > 0 else 1
+        approx_liq = (free_est + notional_est) / (contracts_est * (1 + kmr)) if contracts_est > 0 else 0
+        liq_dist_pct = ((approx_liq / last_price) - 1) * 100 if last_price > 0 else 0
+
         return {
             "symbol": symbol,
             "volume_24h": quote_volume,
             "funding_rate": 0,
             "tick_size": tick_size,
             "tp_ticks": round(tp_ticks, 1),
-            "_candles_15m": candles,  # cached for chart generation
+            "approx_liq": round(approx_liq, 8),
+            "liq_dist_pct": round(liq_dist_pct, 1),
+            "keep_margin_rate": kmr,
+            "last_price": last_price,
+            "max_price_90d": 0,  # filled later for chart symbols
+            "risk_score": 0,     # filled later
+            "_candles_15m": candles,
             **analysis,
         }, "ok", short_name
 
@@ -271,6 +287,42 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols)
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
+
+    # ── Step 7c: Fetch 90d max price and calculate risk score ──
+    # Get chart symbols (same logic as charts.py)
+    from charts import _get_chart_symbols
+    risk_symbols = _get_chart_symbols(scan_results, open_position_symbols)
+    logger.info(f"Fetching 90d daily candles for {len(risk_symbols)} symbols...")
+
+    def _fetch_max_90d(symbol):
+        try:
+            candles_1d = exchange.get_ohlcv(symbol, '1d', limit=90)
+            if candles_1d and len(candles_1d) > 1:
+                return symbol, max(c[2] for c in candles_1d)  # high
+        except Exception:
+            pass
+        return symbol, 0
+
+    max_prices = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_fetch_max_90d, s) for s in risk_symbols]
+        for f in futures:
+            sym, mx = f.result()
+            if mx > 0:
+                max_prices[sym] = mx
+
+    # Apply max_price_90d and risk_score to scan_results
+    for sr in scan_results:
+        sym = sr["symbol"]
+        mx = max_prices.get(sym, 0)
+        sr["max_price_90d"] = round(mx, 8)
+        liq = sr.get("approx_liq", 0)
+        if liq > 0 and mx > 0:
+            sr["risk_score"] = round(min(10, 10 * mx / liq), 1)
+        else:
+            sr["risk_score"] = 0
+
+    logger.info(f"Risk scores calculated for {len(max_prices)} symbols")
 
     # ── Step 8: Execute trade (only if safe) ──
     candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]

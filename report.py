@@ -376,6 +376,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td data-v="{sr['rsi']}" class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td data-v="{sr['atr_pct']}">{sr['atr_pct']:.1f}%</td>
                 <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
+                <td data-v="{sr.get('risk_score', 0)}" class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
+                <td data-v="{sr.get('approx_liq', 0)}">{sr.get('approx_liq', 0):.4g}</td>
+                <td data-v="{sr.get('max_price_90d', 0)}">{sr.get('max_price_90d', 0):.4g if sr.get('max_price_90d', 0) else '—'}</td>
                 <td data-v="{comp_sum}" class="comp-bars">{comp_bars}</td>
             </tr>"""
 
@@ -403,6 +406,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">Slope</span><span class="{slope_cls}">{slope_v:+.3f}</span></div>
             <div class="modal-stat"><span class="label">ROC</span><span class="{roc_cls}">{roc_v:+.2f}</span></div>
             <div class="modal-stat"><span class="label">EMA gap</span><span>{sr.get('ema_gap', 0):+.3f}</span></div>
+        </div>
+        <div class="modal-stats">
+            <div class="modal-stat"><span class="label">Risk</span><span class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}/10</span></div>
+            <div class="modal-stat"><span class="label">Liq (~)</span><span>{sr.get('approx_liq', 0):.4g} (+{sr.get('liq_dist_pct', 0):.0f}%)</span></div>
+            <div class="modal-stat"><span class="label">Max 90d</span><span>{sr.get('max_price_90d', 0):.4g if sr.get('max_price_90d', 0) else '—'}</span></div>
         </div>
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
@@ -466,7 +474,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th class="sortable" data-col="8">RSI</th>
             <th class="sortable" data-col="9">ATR</th>
             <th class="sortable" data-col="10">Vol</th>
-            <th class="sortable" data-col="11" style="min-width:120px">Components</th>
+            <th class="sortable" data-col="11">Risk</th>
+            <th class="sortable" data-col="12">Liq</th>
+            <th class="sortable" data-col="13">Max90d</th>
+            <th class="sortable" data-col="14" style="min-width:120px">Components</th>
         </tr>
     </thead>
     <tbody>
