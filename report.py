@@ -1701,6 +1701,10 @@ function refreshShorts() {{
     }});
 }})();
 
+// Auto-refresh on page load
+refreshPositions();
+refreshShorts();
+
 // Toast notifications
 var _toastContainer;
 function showToast(title, body, duration) {{
