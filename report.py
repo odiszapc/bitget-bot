@@ -178,8 +178,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="checks">{checks_html}</div>
     <div class="outcome {outcome_class}">{_esc(outcome)}</div>
     <div class="countdown-row">
-        <span class="countdown-label">Next cycle in</span>
-        <span class="countdown" id="countdown">--:--</span>
+        <span class="countdown-label" id="cycle-phase">Ready</span>
+        <div class="cycle-progress" id="cycle-progress" style="display:none">
+            <div class="cycle-progress-bar" id="cycle-progress-bar"></div>
+        </div>
     </div>
 </div>
 """
@@ -993,13 +995,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         margin-top: 8px;
     }}
     .countdown-label {{
-        font-size: 12px;
-        color: #6e7681;
+        font-size: 13px;
+        color: #8b949e;
+        font-weight: 600;
     }}
-    .countdown {{
-        font-size: 20px;
-        font-weight: 700;
-        color: #58a6ff;
+    .cycle-progress {{
+        flex: 1;
+        height: 6px;
+        background: #21262d;
+        border-radius: 3px;
+        overflow: hidden;
+        max-width: 200px;
+    }}
+    .cycle-progress-bar {{
+        height: 100%;
+        background: linear-gradient(90deg, #1f6feb, #58a6ff);
+        border-radius: 3px;
+        transition: width 0.5s ease;
+        width: 0%;
     }}
     .scan-row {{
         cursor: pointer;
@@ -1534,31 +1547,73 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
 }})();
 
+// Cycle status polling
 (function() {{
-    var cycleMinutes = {cycle_minutes_js};
-    var generatedAt = new Date("{now_iso}");
-    var nextCycle = new Date(generatedAt.getTime() + cycleMinutes * 60 * 1000);
-    var el = document.getElementById("countdown");
-    if (!el) return;
-    var refreshTimer = null;
-    function tick() {{
-        var diff = Math.floor((nextCycle - Date.now()) / 1000);
-        if (diff <= 0) {{
-            el.innerHTML = 'waiting for update...<span class="spinner"></span>';
-            el.style.color = "#3fb950";
-            if (!refreshTimer) {{
-                refreshTimer = setInterval(function() {{
+    var phaseEl = document.getElementById("cycle-phase");
+    var progressWrap = document.getElementById("cycle-progress");
+    var progressBar = document.getElementById("cycle-progress-bar");
+    if (!phaseEl) return;
+
+    var initialReadyAt = null;
+    var pollInterval = 10000;
+    var pollTimer = null;
+
+    function poll() {{
+        fetch("/cycle_status.json?" + Date.now())
+        .then(function(r) {{
+            if (!r.ok) throw new Error("Status " + r.status);
+            return r.json();
+        }})
+        .then(function(data) {{
+            var phase = data.phase || "Unknown";
+            var progress = data.progress || 0;
+            var updatedAt = data.updated_at || 0;
+
+            if (phase === "Ready") {{
+                if (initialReadyAt === null) {{
+                    // First load — remember this ready timestamp
+                    initialReadyAt = updatedAt;
+                    phaseEl.textContent = "Ready";
+                    phaseEl.style.color = "#3fb950";
+                    progressWrap.style.display = "none";
+                    setPollRate(10000);
+                }} else if (updatedAt !== initialReadyAt) {{
+                    // New ready — page is stale, reload
                     location.reload();
-                }}, 5000);
+                }} else {{
+                    // Same ready — idle
+                    phaseEl.textContent = "Ready";
+                    phaseEl.style.color = "#3fb950";
+                    progressWrap.style.display = "none";
+                    setPollRate(10000);
+                }}
+            }} else {{
+                // Active cycle
+                phaseEl.textContent = phase + " " + progress + "%";
+                phaseEl.style.color = "#58a6ff";
+                progressWrap.style.display = "block";
+                progressBar.style.width = progress + "%";
+                setPollRate(2000);
             }}
-            return;
-        }}
-        var m = Math.floor(diff / 60);
-        var s = diff % 60;
-        el.textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+        }})
+        .catch(function(e) {{
+            phaseEl.textContent = "Status unavailable";
+            phaseEl.style.color = "#f85149";
+            progressWrap.style.display = "none";
+            setPollRate(10000);
+        }});
     }}
-    tick();
-    setInterval(tick, 1000);
+
+    function setPollRate(ms) {{
+        if (pollInterval !== ms) {{
+            pollInterval = ms;
+            clearInterval(pollTimer);
+            pollTimer = setInterval(poll, ms);
+        }}
+    }}
+
+    poll();
+    pollTimer = setInterval(poll, pollInterval);
 }})();
 document.addEventListener("keydown", function(e) {{
     if (e.key === "Escape") {{

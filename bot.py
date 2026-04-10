@@ -36,6 +36,7 @@ from state import (
 )
 from report import generate_report
 from charts import generate_charts_for_symbols
+from cycle_status import CycleStatus
 
 # ── Logging setup ───────────────────────────────────────────
 os.makedirs("logs", exist_ok=True)
@@ -64,10 +65,14 @@ def load_config() -> dict:
 
 
 # ── Main cycle ──────────────────────────────────────────────
-def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool):
+def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool, status: CycleStatus = None):
     """Run one complete trading cycle."""
+    if status is None:
+        status = CycleStatus()
+
     logger.info("=" * 60)
     logger.info("Starting new cycle")
+    status.start_phase("Loading market")
 
     # Reload state from disk to pick up changes made by api_server
     fresh = load_state()
@@ -191,6 +196,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     skipped_atr = 0
     skipped_data = 0
     completed = 0
+    status.start_phase("Loading coins", total_symbols)
 
     def _analyze_one(symbol):
         """Fetch candles and analyze one symbol. Returns (result_dict, status)."""
@@ -251,13 +257,14 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         futures = {pool.submit(_analyze_one, sym): sym for sym in liquid_symbols}
         for future in as_completed(futures):
             completed += 1
-            result, status, short_name = future.result()
-            if status == "no_data":
+            result, result_status, short_name = future.result()
+            if result_status == "no_data":
                 skipped_data += 1
-            elif status.startswith("atr_"):
+            elif result_status.startswith("atr_"):
                 skipped_atr += 1
             else:
                 scan_results.append(result)
+            status.tick()
             if completed % 50 == 0:
                 logger.info(f"  {completed}/{total_symbols} done...")
 
@@ -283,8 +290,9 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     chart_map = {}
     if config.get("charts_enabled", False):
         logger.info("Generating charts...")
+        status.start_phase("Rendering", 0)  # total set inside generate_charts
         try:
-            chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols)
+            chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols, status)
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
 
@@ -293,6 +301,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     from charts import _get_chart_symbols
     risk_symbols = _get_chart_symbols(scan_results, open_position_symbols)
     logger.info(f"Fetching 90d daily candles for {len(risk_symbols)} symbols...")
+    status.start_phase("Analyzing risk", len(risk_symbols))
 
     def _fetch_days_since_liq(args):
         symbol, approx_liq = args
@@ -319,6 +328,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         for f in futures:
             sym, days = f.result()
             days_since[sym] = days
+            status.tick()
 
     # Apply days_since_liq and risk_score to scan_results
     for sr in scan_results:
@@ -458,6 +468,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         "recent_closes": recent_closes, "cycle_duration": cycle_duration,
     }
     generate_report(state, exchange_positions, current_balance, exchange, cycle_info)
+    status.ready()
 
 
 def manage_trailing_stops(
@@ -535,9 +546,11 @@ def main():
     logger.info(f"Bot started. Cycle every {cycle_minutes} minutes.")
     logger.info("Press Ctrl+C to stop.\n")
 
+    cycle_status = CycleStatus()
+
     while True:
         try:
-            run_cycle(exchange, risk, state, dry_run)
+            run_cycle(exchange, risk, state, dry_run, cycle_status)
         except KeyboardInterrupt:
             logger.info("Bot stopped by user")
             save_state(state)

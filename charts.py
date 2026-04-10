@@ -139,7 +139,7 @@ def _get_chart_symbols(scan_results: list[dict], open_position_symbols: set = No
     return list(chart_symbols)
 
 
-def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None) -> dict:
+def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None, status=None) -> dict:
     """
     Generate charts for top scan results + open positions.
     Reuses cached 15m candles from scan phase.
@@ -152,6 +152,9 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict], open_positio
 
     symbols = _get_chart_symbols(scan_results, open_position_symbols)
     logger.info(f"Chart symbols: {len(symbols)} unique (from top-20 per metric + open positions)")
+
+    if status:
+        status.start_phase("Rendering", len(symbols))
 
     # Build cache of 15m candles from scan results
     candles_cache = {}
@@ -185,6 +188,8 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict], open_positio
         for future in futures:
             symbol, result = future.result()
             chart_map[symbol] = result
+            if status:
+                status.tick()
 
     generated = sum(len(v) for v in chart_map.values())
     logger.info(f"Charts done: {generated} charts for {len(symbols)} symbols")
