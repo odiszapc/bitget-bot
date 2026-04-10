@@ -91,7 +91,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{_fmt_price(p['tp'])}</td>
                 <td>{_fmt_price(p['break_even_price'])}</td>
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
-                <td class="warning">{p['deducted_fee']:.4f}</td>
+                <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{-p['deducted_fee']:+.4f if p['deducted_fee'] != 0 else '0.0000'}</td>
+                <td class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{p['funding_fee']:+.4f if p['funding_fee'] != 0 else '0.0000'}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
@@ -125,7 +126,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">TP</span><span>{_fmt_price(p['tp'])}</span></div>
             <div class="modal-stat"><span class="label">Break Even</span><span>{_fmt_price(p['break_even_price'])}</span></div>
             <div class="modal-stat"><span class="label">Liq</span><span class="liq-price">{_fmt_price(p['liq_price'])}</span></div>
-            <div class="modal-stat"><span class="label">Fee</span><span class="warning">{p['deducted_fee']:.4f}</span></div>
+            <div class="modal-stat"><span class="label">Fee</span><span class="{'negative' if p['deducted_fee'] > 0 else 'muted'}">{-p['deducted_fee']:+.4f if p['deducted_fee'] != 0 else '0.0000'}</span></div>
+            <div class="modal-stat"><span class="label">Funding</span><span class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{p['funding_fee']:+.4f if p['funding_fee'] != 0 else '0.0000'}</span></div>
             <div class="modal-stat"><span class="label">Opened</span><span>{p['opened_str']}</span></div>
         </div>
         <div class="modal-progress"><div class="prog-track" style="height:10px" title="{prog_tooltip}"><div class="prog-fill {p['prog_cls']}" style="width:{p['prog_val']:.1f}%"></div></div></div>
@@ -135,7 +137,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="12" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="13" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -1474,6 +1476,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>BE</th>
             <th>Liq</th>
             <th>Fee</th>
+            <th>Fund</th>
             <th>PnL</th>
             <th>Opened</th>
         </tr>
@@ -1704,7 +1707,7 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="12" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="empty">No open positions</td></tr>';
             return;
         }}
 
@@ -1733,7 +1736,8 @@ function refreshPositions() {{
                 '<td>' + fmtP(p.tp) + '</td>' +
                 '<td>' + fmtP(p.break_even_price) + '</td>' +
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
-                '<td class="warning">' + (p.deducted_fee || 0).toFixed(4) + '</td>' +
+                (function() {{ var df=p.deducted_fee||0; var cls=df>0?"negative":(df<0?"positive":"muted"); return '<td class="'+cls+'">'+(df!==0?(-df>0?"+":"")+(-df).toFixed(4):"0.0000")+'</td>'; }})() +
+                (function() {{ var ff=p.funding_fee||0; var cls=ff>0?"positive":(ff<0?"negative":"muted"); return '<td class="'+cls+'">'+(ff!==0?(ff>0?"+":"")+ff.toFixed(4):"0.0000")+'</td>'; }})() +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
                 '</tr>';

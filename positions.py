@@ -34,6 +34,7 @@ def build_position_data(
         pnl_pct = ep.get("percentage", 0)
         liq_price = ep.get("liquidation_price", 0)
         deducted_fee = ep.get("deducted_fee", 0)
+        funding_fee = ep.get("funding_fee", 0)
         break_even = ep.get("break_even_price", 0)
         pp = ep.get("price_precision", 2)
 
@@ -110,6 +111,7 @@ def build_position_data(
             "prog_label_l": prog_label_l,
             "prog_label_r": prog_label_r,
             "deducted_fee": deducted_fee,
+            "funding_fee": funding_fee,
             "break_even_price": break_even,
         })
 

@@ -179,6 +179,7 @@ class Exchange:
                             "stop_loss": float(sl_raw) if sl_raw else 0,
                             "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
                             "deducted_fee": float(info.get("deductedFee", 0) or 0),
+                            "funding_fee": float(info.get("totalFee", 0) or 0),
                             "break_even_price": float(info.get("breakEvenPrice", 0) or 0),
                             "timestamp": pos.get("timestamp", 0) or int(info.get("cTime", 0)),
                             "price_precision": self._get_price_decimals(pos["symbol"]),
