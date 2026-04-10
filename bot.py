@@ -329,7 +329,17 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         if days < 0:
             sr["risk_score"] = 10      # no data = risky
         elif days >= 1000:
-            sr["risk_score"] = 1       # never above liq in available history
+            # Never found — risk depends on how many days we checked
+            checked = days - 1000
+            if checked >= 60:
+                sr["risk_score"] = 1   # 60-90 days checked, never hit
+            elif checked >= 30:
+                sr["risk_score"] = 2   # 30-59 days checked
+            elif checked >= 14:
+                sr["risk_score"] = 4   # 14-29 days checked
+            else:
+                sr["risk_score"] = 8   # <14 days — too little history
+            continue
         elif days <= 3:
             sr["risk_score"] = 10      # 1-3 days ago
         elif days <= 14:
