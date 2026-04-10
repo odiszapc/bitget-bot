@@ -201,6 +201,20 @@ def api_positions():
         pos_data = build_position_data(exchange_positions, state, exchange)
         balance = exchange.get_balance()
 
+        # Calculate days_since_liq for each position
+        for p in pos_data:
+            liq = p.get("liq_price", 0)
+            if liq > 0:
+                try:
+                    candles_1d = exchange.get_ohlcv(p["symbol"], '1d', limit=90)
+                    if candles_1d and len(candles_1d) > 1:
+                        for i in range(len(candles_1d) - 1, -1, -1):
+                            if candles_1d[i][2] >= liq:
+                                p["days_since_liq"] = len(candles_1d) - 1 - i
+                                break
+                except Exception:
+                    pass
+
         return jsonify({
             "ok": True,
             "positions": pos_data,

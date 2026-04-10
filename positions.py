@@ -113,6 +113,7 @@ def build_position_data(
             "deducted_fee": deducted_fee,
             "funding_fee": funding_fee,
             "break_even_price": break_even,
+            "days_since_liq": -1,  # filled by caller if available
         })
 
     return result

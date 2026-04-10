@@ -93,6 +93,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
                 <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{f"{-p['deducted_fee']:+.4f}" if p['deducted_fee'] != 0 else "0.0000"}</td>
                 <td class="{'positive' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{f"{p['funding_fee']:+.4f}" if p['funding_fee'] != 0 else "0.0000"}</td>
+                <td>{f"{p.get('days_since_liq')}d" if 0 <= p.get('days_since_liq', -1) < 90 else ("90d+" if p.get('days_since_liq', -1) >= 90 else "—")}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
@@ -137,7 +138,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="13" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="14" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -1493,6 +1494,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Liq</th>
             <th>Fee</th>
             <th>Fund</th>
+            <th>Last@Liq</th>
             <th>PnL</th>
             <th>Opened</th>
         </tr>
@@ -1723,7 +1725,7 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="13" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="empty">No open positions</td></tr>';
             return;
         }}
 
@@ -1754,6 +1756,7 @@ function refreshPositions() {{
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
                 (function() {{ var df=p.deducted_fee||0; var cls=df>0?"negative":(df<0?"positive":"muted"); return '<td class="'+cls+'">'+(df!==0?(-df>0?"+":"")+(-df).toFixed(4):"0.0000")+'</td>'; }})() +
                 (function() {{ var ff=p.funding_fee||0; var cls=ff>0?"positive":(ff<0?"negative":"muted"); return '<td class="'+cls+'">'+(ff!==0?(ff>0?"+":"")+ff.toFixed(4):"0.0000")+'</td>'; }})() +
+                '<td>' + (function() {{ var d=p.days_since_liq; if(d===undefined||d===null||d<0) return "\u2014"; if(d>=90) return "90d+"; return d+"d"; }})() + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
                 '</tr>';
