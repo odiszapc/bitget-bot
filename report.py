@@ -323,7 +323,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             comp_sum = n_adx + n_slope + n_roc + n_ema
 
             scan_rows += f"""
-            <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
+            <tr class="{row_class} scan-row" onclick="openModal('{modal_id}')"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
                 <td data-v="{dt_score}" class="{score_cls}"><b>{dt_score:.0f}</b></td>
@@ -386,7 +386,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             </div>
             <div class="trade-select">
                 <span class="label">TP ROI</span>
-                <select class="tp-roi-select">
+                <select class="tp-roi-select" onchange="updateExposure(this, {leverage})">
                     <option value="1">1%</option>
                     <option value="2">2%</option>
                     <option value="3" selected>3%</option>
@@ -395,9 +395,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     <option value="10">10%</option>
                 </select>
             </div>
-            <div class="trade-exposure">
-                <span class="label">Exp</span>
-                <span class="exposure-value">20%&times;{leverage}x={20 * leverage}%</span>
+            <div class="trade-info">
+                <span class="label">Fee + BE</span>
+                <span class="fee-estimate" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001">—</span>
             </div>
         </div>
         <div class="modal-actions">
@@ -1023,6 +1023,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         gap: 4px;
         margin-left: auto;
     }}
+    .trade-info {{
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-left: auto;
+    }}
+    .trade-info .label {{
+        font-size: 10px;
+        color: #6e7681;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }}
+    .fee-estimate {{
+        font-size: 13px;
+        color: #d29922;
+        font-weight: 600;
+    }}
     .exposure-value {{
         font-size: 13px;
         font-weight: 600;
@@ -1330,13 +1348,34 @@ document.addEventListener("keydown", function(e) {{
     }}
 }});
 
-// Update exposure label when bet % changes
+// Open modal and init fee calculation
+function openModal(id) {{
+    var modal = document.getElementById(id);
+    modal.style.display = "flex";
+    var sel = modal.querySelector(".bet-pct-select");
+    if (sel) {{
+        var lev = parseFloat((modal.querySelector(".fee-estimate") || {{}}).getAttribute("data-lev")) || 10;
+        updateExposure(sel, lev);
+    }}
+}}
+
+// Update fee estimate when bet/tp changes
 function updateExposure(sel, leverage) {{
-    var pct = parseInt(sel.value);
-    var exposure = pct * leverage;
     var row = sel.closest(".modal-trade-row");
-    var label = row.querySelector(".exposure-value");
-    label.innerHTML = pct + "%&times;" + leverage + "x=" + exposure + "%";
+    var betPct = parseInt(row.querySelector(".bet-pct-select").value);
+    var tpRoi = parseFloat(row.querySelector(".tp-roi-select").value);
+    // Fee estimate
+    var feeEl = row.querySelector(".fee-estimate");
+    if (feeEl) {{
+        var bal = parseFloat(feeEl.getAttribute("data-bal")) || 0;
+        var lev = parseFloat(feeEl.getAttribute("data-lev")) || 10;
+        var rate = parseFloat(feeEl.getAttribute("data-rate")) || 0.001;
+        var margin = bal * betPct / 100;
+        var openFee = margin * lev * rate;
+        var totalFee = openFee * 2;
+        var bePct = rate * lev * 2 * 100;
+        feeEl.innerHTML = "~" + totalFee.toFixed(2) + " USDT <small style='color:#6e7681'>(" + bePct.toFixed(1) + "% ROI to BE)</small>";
+    }}
 }}
 
 // Manual SHORT button
