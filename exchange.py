@@ -427,6 +427,90 @@ class Exchange:
             logger.error(f"Error fetching close shorts history: {e}")
             return []
 
+    def get_closed_short_trades(self, limit: int = 20) -> list[dict]:
+        """
+        Get recent closed short trades with entry/exit prices, fees, duration.
+        Returns list sorted newest first.
+        """
+        try:
+            # Get bills to find symbols and balances
+            bills = self.get_recent_close_shorts(limit=100)
+            symbols_with_closes = set()
+            bill_balances = {}
+            bill_fees = {}
+            for b in bills:
+                sym = b.get('symbol', '')
+                bt = b.get('businessType', '')
+                if bt == 'close_short':
+                    symbols_with_closes.add(sym)
+                    ctime = int(b.get('cTime', 0))
+                    bal = float(b.get('balance', 0))
+                    # Keep latest balance per symbol+time
+                    bill_balances[f"{sym}_{ctime}"] = bal
+                # Collect all fees by symbol
+                if bt in ('open_short', 'close_short'):
+                    fee = abs(float(b.get('fee', 0) or 0))
+                    bill_fees.setdefault(sym, []).append(fee)
+
+            # Get orders for each symbol
+            trades = []
+            for sym in symbols_with_closes:
+                ccxt_sym = sym.replace('USDT', '/USDT:USDT')
+                try:
+                    orders = self._api_call('fetch_closed_orders', ccxt_sym, None, limit)
+                    opens = []
+                    closes = []
+                    for o in orders:
+                        info = o.get('info', {})
+                        d = {
+                            'price': float(info.get('priceAvg', 0) or 0),
+                            'fee': abs(float(info.get('fee', 0) or 0)),
+                            'profit': float(info.get('totalProfits', 0) or 0),
+                            'time': int(info.get('cTime', 0)),
+                        }
+                        if info.get('tradeSide') == 'open':
+                            opens.append(d)
+                        elif info.get('tradeSide') == 'close':
+                            closes.append(d)
+
+                    for i, op in enumerate(opens):
+                        cl = closes[i] if i < len(closes) else None
+                        if not cl:
+                            continue
+                        dur_sec = (cl['time'] - op['time']) / 1000
+                        total_fee = op['fee'] + cl['fee']
+                        net = cl['profit'] - total_fee
+                        # Find balance from bills
+                        bal_key = f"{sym}_{cl['time']}"
+                        bal = bill_balances.get(bal_key, 0)
+                        # Try nearby timestamps if exact match fails
+                        if not bal:
+                            for bk, bv in bill_balances.items():
+                                if bk.startswith(sym + '_') and abs(int(bk.split('_')[1]) - cl['time']) < 5000:
+                                    bal = bv
+                                    break
+
+                        short_name = sym.replace('USDT', '')
+                        trades.append({
+                            'symbol': short_name,
+                            'entry_price': op['price'],
+                            'exit_price': cl['price'],
+                            'fees': round(total_fee, 4),
+                            'net': round(net, 4),
+                            'profit': round(cl['profit'], 4),
+                            'balance': round(bal, 2),
+                            'duration_sec': dur_sec,
+                            'timestamp': cl['time'] / 1000,
+                        })
+                except Exception as e:
+                    logger.debug(f"Error fetching orders for {ccxt_sym}: {e}")
+
+            trades.sort(key=lambda t: t['timestamp'], reverse=True)
+            return trades[:limit]
+        except Exception as e:
+            logger.error(f"Error building closed trades: {e}")
+            return []
+
     def get_btc_24h_change(self) -> float:
         """Get BTC/USDT 24h price change percentage."""
         ticker = self.get_ticker("BTC/USDT:USDT")

@@ -309,28 +309,10 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # ── Fetch recent close shorts for report ──
     recent_closes = []
     try:
-        bills = exchange.get_recent_close_shorts()
-        bills.sort(key=lambda b: (int(b.get('cTime', 0)), float(b.get('balance', 0))))
-        # Collect only close_short entries
-        close_list = []
-        for b in bills:
-            if b.get('businessType') == 'close_short':
-                close_list.append({
-                    'symbol': b.get('symbol', '').replace('USDT', ''),
-                    'balance': round(float(b.get('balance', 0)), 2),
-                    'timestamp': int(b.get('cTime', 0)) / 1000,
-                })
-        # Delta = difference between consecutive close_short balances
-        for i, c in enumerate(close_list):
-            if i > 0:
-                c['delta'] = round(c['balance'] - close_list[i - 1]['balance'], 2)
-            else:
-                c['delta'] = None
-        close_list.reverse()
         closes_limit = config.get('recent_closes_count', 12)
-        recent_closes = close_list[:closes_limit]
+        recent_closes = exchange.get_closed_short_trades(limit=closes_limit)
     except Exception as e:
-        logger.error(f"Error processing close shorts: {e}")
+        logger.error(f"Error fetching closed trades: {e}")
 
     logger.info(get_stats(state))
     api_calls = exchange.api_call_count

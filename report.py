@@ -205,31 +205,44 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             delta_cls = "positive" if pnl >= 0 else "negative"
             shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-bal close-bal-open">{bal_str}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
-        # Closed shorts
-        for i, rc in enumerate(recent_closes):
+        # Closed shorts with entry/exit/fees/net
+        prev_bal = None
+        for rc in recent_closes:
             sym = _esc(rc["symbol"])
-            bal = f"{rc['balance']:.2f}"
-            dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
-            time_str = dt.strftime("%b-%d %H:%M")
-            if i == 0 and not pos_data:
-                diff = now_utc - dt
-                mins = int(diff.total_seconds() / 60)
-                if mins < 60:
-                    rel = f"{mins} min ago"
-                elif mins < 1440:
-                    rel = f"{mins // 60} h ago"
-                else:
-                    rel = f"{mins // 1440} d ago"
-                time_str += f" ({rel})"
+            entry_p = rc.get("entry_price", 0)
+            exit_p = rc.get("exit_price", 0)
+            fees = rc.get("fees", 0)
+            net = rc.get("net", 0)
+            bal = rc.get("balance", 0)
+            dur_sec = rc.get("duration_sec", 0)
 
-            if rc["delta"] is not None:
-                delta_str = f"{rc['delta']:+.2f}"
-                delta_cls = "positive" if rc["delta"] >= 0 else "negative"
+            # Format duration
+            if dur_sec < 60:
+                dur_str = f"{dur_sec:.0f}s"
+            elif dur_sec < 3600:
+                dur_str = f"{dur_sec / 60:.0f}m"
+            else:
+                dur_str = f"{dur_sec / 3600:.1f}h"
+
+            dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
+            time_str = f"{dt.strftime('%b-%d %H:%M')} ({dur_str})"
+
+            # Balance delta
+            if prev_bal is not None and bal > 0:
+                delta = round(bal - prev_bal, 2)
+                delta_str = f"{delta:+.2f}"
+                delta_cls = "positive" if delta >= 0 else "negative"
             else:
                 delta_str = "—"
                 delta_cls = "muted"
+            prev_bal = bal
 
-            shorts_rows += f'<div class="close-row"><span class="close-sym">{sym}</span><span class="close-bal">{bal}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+            net_cls = "positive" if net >= 0 else "negative"
+            sym_cls = "negative" if net < 0 else ""
+            exit_cls = "negative" if exit_p > entry_p else ""  # price went up = bad for short
+            pp = len(str(entry_p).rstrip('0').split('.')[-1]) if '.' in str(entry_p) else 0
+
+            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee">{fees:.3f}</span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
 
         if shorts_rows:
             closes_section = f"""
@@ -766,12 +779,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         color: #d29922 !important;
     }}
     .close-sym {{
-        width: 70px;
+        width: 55px;
         color: #c9d1d9;
         font-weight: 600;
     }}
+    .close-price {{
+        width: 70px;
+        text-align: right;
+        color: #8b949e;
+        font-size: 12px;
+    }}
+    .close-fee {{
+        width: 50px;
+        text-align: right;
+        color: #6e7681;
+        font-size: 12px;
+    }}
     .close-bal {{
-        width: 80px;
+        width: 55px;
         text-align: right;
         color: #8b949e;
     }}
@@ -1657,17 +1682,48 @@ function refreshShorts() {{
         }}
 
         // Closed shorts
+        var prevBal = null;
         for (var j = 0; j < closes.length; j++) {{
             var c = closes[j];
-            var dCls = "muted";
-            var dStr = "\u2014";
-            if (c.delta !== null) {{
-                dCls = c.delta >= 0 ? "positive" : "negative";
-                dStr = (c.delta >= 0 ? "+" : "") + c.delta.toFixed(2);
-            }}
+            var net = c.net || 0;
+            var netCls = net >= 0 ? "positive" : "negative";
+            var symCls = net < 0 ? "negative" : "";
+            var exitCls = (c.exit_price || 0) > (c.entry_price || 0) ? "negative" : "";
+            var ep = c.entry_price || 0;
+            var xp = c.exit_price || 0;
+            var fees = c.fees || 0;
+            var bal = c.balance || 0;
+
+            // Duration
+            var ds = c.duration_sec || 0;
+            var durStr = ds < 60 ? Math.round(ds) + "s" : (ds < 3600 ? Math.round(ds/60) + "m" : (ds/3600).toFixed(1) + "h");
+
             var dt = new Date(c.timestamp * 1000);
-            var timeStr = dt.toLocaleDateString("en", {{month:"short",day:"2-digit"}}) + " " + dt.toLocaleTimeString("en", {{hour:"2-digit",minute:"2-digit",hour12:false}});
-            html += '<div class="close-row"><span class="close-sym">' + c.symbol + '</span><span class="close-bal">' + c.balance.toFixed(2) + '</span><span class="close-delta ' + dCls + '">' + dStr + '</span><span class="close-time">' + timeStr + '</span></div>';
+            var timeStr = dt.toLocaleDateString("en", {{month:"short",day:"2-digit"}}) + " " + dt.toLocaleTimeString("en", {{hour:"2-digit",minute:"2-digit",hour12:false}}) + " (" + durStr + ")";
+
+            // Balance delta
+            var bdCls = "muted";
+            var bdStr = "\u2014";
+            if (prevBal !== null && bal > 0) {{
+                var bd = Math.round((bal - prevBal) * 100) / 100;
+                bdCls = bd >= 0 ? "positive" : "negative";
+                bdStr = (bd >= 0 ? "+" : "") + bd.toFixed(2);
+            }}
+            prevBal = bal;
+
+            // Price precision
+            var epS = ep.toString();
+            var pp = epS.indexOf(".") >= 0 ? epS.replace(/0+$/, "").split(".")[1].length : 0;
+
+            html += '<div class="close-row">' +
+                '<span class="close-sym ' + symCls + '">' + c.symbol + '</span>' +
+                '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
+                '<span class="close-price ' + exitCls + '">' + xp.toFixed(pp) + '</span>' +
+                '<span class="close-fee">' + fees.toFixed(3) + '</span>' +
+                '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
+                '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
+                '<span class="close-delta ' + bdCls + '">' + bdStr + '</span>' +
+                '<span class="close-time">' + timeStr + '</span></div>';
         }}
 
         container.innerHTML = html || '<div class="muted" style="padding:10px 0">No shorts yet</div>';
