@@ -113,15 +113,20 @@ OVERLAP_CANDLES = {
 }
 
 
-def generate_charts_for_symbols(exchange, scan_results: list[dict]) -> dict:
+def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None) -> dict:
     """
-    Generate charts for top scan results.
+    Generate charts for top scan results + open positions.
     Returns {symbol: {"1m": "candles/BTC_USDT_1m.png", ...}}
     """
     clear_candles_dir()
 
     chart_map = {}
     symbols = [sr["symbol"] for sr in scan_results[:20]]
+    # Always include open positions even if not in top 20
+    if open_position_symbols:
+        for ops in open_position_symbols:
+            if ops not in symbols:
+                symbols.append(ops)
 
     for cidx, symbol in enumerate(symbols):
         short_name = symbol.split("/")[0].split(":")[0]
