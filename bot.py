@@ -179,8 +179,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         is_open_position = symbol in open_position_symbols
         short_name = symbol.split("/")[0].split(":")[0]
 
-        if (sym_idx + 1) % 50 == 0 or sym_idx == 0:
-            logger.info(f"  Analyzing {sym_idx + 1}/{total_symbols}...")
+        logger.info(f"  [{sym_idx + 1}/{total_symbols}] {short_name}")
 
         candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
         df = candles_to_dataframe(candles)
