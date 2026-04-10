@@ -341,7 +341,14 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     logger.info(f"Risk scores calculated for {len(days_since)} symbols")
 
     # ── Step 8: Execute trade (only if safe) ──
-    candidates = [s for s in scan_results if s.get("downtrend_score", 0) >= min_score and s["symbol"] not in open_position_symbols]
+    max_risk = config.get("max_risk_score", 3)
+    default_tp_roi = config.get("auto_tp_roi_pct", 3.0)
+    candidates = [
+        s for s in scan_results
+        if s.get("downtrend_score", 0) >= min_score
+        and s.get("risk_score", 10) <= max_risk
+        and s["symbol"] not in open_position_symbols
+    ]
     outcome = ""
 
     if not all_safe:
@@ -351,50 +358,70 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     else:
         best = candidates[0]
         symbol = best["symbol"]
-        atr_pct = best["atr_pct"]
-        logger.info(f"Best candidate: {symbol} (RSI={best['rsi']:.1f})")
+        logger.info(
+            f"Best candidate: {symbol} "
+            f"(score={best.get('downtrend_score', 0):.0f}, risk={best.get('risk_score', 0)})"
+        )
 
         margin = risk.calculate_position_size(current_balance, open_short_count)
         if margin <= 0:
             outcome = "Position size is zero, skipping"
         else:
-            ticker = exchange.get_ticker(symbol)
-            if not ticker:
-                outcome = f"Could not fetch ticker for {symbol}"
+            if dry_run:
+                ticker = exchange.get_ticker(symbol)
+                entry_price = ticker["last"] if ticker else 0
+                tp_price_pct = default_tp_roi / leverage
+                tp_price = entry_price * (1 - tp_price_pct / 100)
+                logger.info(f"DRY RUN — order not placed")
+                position = {
+                    "order_id": "dry-run",
+                    "symbol": symbol,
+                    "entry_price": entry_price,
+                    "amount": 0,
+                    "margin_usdt": margin,
+                    "stop_loss": 0,
+                    "take_profit": tp_price,
+                    "timestamp": time.time(),
+                }
             else:
-                entry_price = ticker["last"]
-                sl_price, tp_price = calculate_sl_tp(entry_price, atr_pct, config)
-
-                tp_pct = abs(entry_price - tp_price) / entry_price * 100
-
-                logger.info(
-                    f"Trade plan: SHORT {symbol} @ {entry_price} | "
-                    f"TP={tp_price} ({tp_pct:.1f}%) | no SL | "
-                    f"Margin={margin:.2f} USDT"
-                )
-
-                if dry_run:
-                    logger.info("DRY RUN — order not placed")
-                    position = {
-                        "order_id": "dry-run",
-                        "symbol": symbol,
-                        "entry_price": entry_price,
-                        "amount": 0,
-                        "margin_usdt": margin,
-                        "stop_loss": 0,
-                        "take_profit": tp_price,
-                        "timestamp": time.time(),
-                    }
-                else:
-                    position = exchange.open_short_tp_only(symbol, margin, tp_price)
-
+                # Step 1: Open without TP (same as manual)
+                position = exchange.open_short_no_tp(symbol, margin)
                 if position:
-                    add_position(state, position)
-                    outcome = f"Opened SHORT {symbol}"
-                    logger.info(f"✅ Short opened: {symbol}")
-                else:
-                    outcome = f"Failed to open short for {symbol}"
-                    logger.error(outcome)
+                    fill_price = position["entry_price"]
+                    tick_size = exchange.get_tick_size(symbol)
+
+                    # Step 2: Calculate TP from fill price
+                    tp_price_pct = default_tp_roi / leverage
+                    tp_price = fill_price * (1 - tp_price_pct / 100)
+                    tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
+                    if tp_price >= fill_price:
+                        tp_price = float(exchange.exchange.price_to_precision(symbol, fill_price - tick_size))
+
+                    # Step 3: Set TP with retry
+                    tp_set = False
+                    for attempt in range(3):
+                        if exchange.set_take_profit(symbol, tp_price, position["amount"]):
+                            tp_set = True
+                            break
+                        time.sleep(1)
+
+                    position["take_profit"] = tp_price
+
+                    if not tp_set:
+                        state.setdefault("pending_tp", {})[symbol] = {
+                            "tp_price": tp_price,
+                            "amount": position["amount"],
+                            "timestamp": time.time(),
+                        }
+                        logger.error(f"TP failed after 3 retries for {symbol}")
+
+            if position:
+                add_position(state, position)
+                outcome = f"Opened SHORT {symbol} (TP={position.get('take_profit', 0)})"
+                logger.info(f"✅ Short opened: {symbol} fill={position['entry_price']} TP={position.get('take_profit', 0)}")
+            else:
+                outcome = f"Failed to open short for {symbol}"
+                logger.error(outcome)
 
     # ── Fetch recent close shorts for report ──
     recent_closes = []
