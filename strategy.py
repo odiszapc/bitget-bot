@@ -83,13 +83,19 @@ def _adx_directional(df: pd.DataFrame, period: int = 14) -> tuple[float, float, 
     return (di_minus - di_plus) * (adx / 100), adx, di_plus, di_minus
 
 
-def _slope_pct(df: pd.DataFrame, period: int = 14) -> float:
-    """Linear regression slope of close prices as %/candle."""
+def _slope_and_r2(df: pd.DataFrame, period: int = 30) -> tuple[float, float]:
+    """Linear regression slope (%/candle) and R² (trend quality 0-1)."""
     closes = df["close"].iloc[-period:].values
     x = np.arange(len(closes))
-    slope = np.polyfit(x, closes, 1)[0]
+    coeffs = np.polyfit(x, closes, 1)
     avg = closes.mean()
-    return (slope / avg) * 100 if avg != 0 else 0.0
+    slope_pct = (coeffs[0] / avg) * 100 if avg != 0 else 0.0
+    # R² — how well a straight line fits the price action
+    predicted = np.polyval(coeffs, x)
+    ss_res = np.sum((closes - predicted) ** 2)
+    ss_tot = np.sum((closes - avg) ** 2)
+    r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    return slope_pct, max(0.0, r2)
 
 
 def _roc_weighted(df: pd.DataFrame) -> float:
@@ -113,12 +119,12 @@ def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
 def calculate_downtrend_components(df: pd.DataFrame) -> dict:
     """Calculate raw downtrend components for a single symbol."""
     adx_dir, adx, di_plus, di_minus = _adx_directional(df)
-    slope = _slope_pct(df)
+    slope, r2 = _slope_and_r2(df)
     roc_w = _roc_weighted(df)
     ema_g = _ema_gap(df)
     return {
         "adx_dir": adx_dir, "adx": adx, "di_plus": di_plus, "di_minus": di_minus,
-        "slope": slope, "roc_w": roc_w, "ema_gap": ema_g,
+        "slope": slope, "roc_w": roc_w, "ema_gap": ema_g, "r2": r2,
     }
 
 
@@ -148,9 +154,10 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         r["n_slope"] = round(n_slope[i], 1)
         r["n_roc"] = round(n_roc[i], 1)
         r["n_ema"] = round(n_ema[i], 1)
-        r["downtrend_score"] = round(
-            0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i], 1
-        )
+        raw_score = 0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i]
+        # R² multiplier: penalizes flash crashes, rewards smooth trends
+        r2 = r.get("r2", 1.0)
+        r["downtrend_score"] = round(raw_score * r2, 1)
 
 
 def analyze_symbol(df: pd.DataFrame, config: dict) -> dict:
