@@ -116,31 +116,54 @@ OVERLAP_CANDLES = {
 def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None) -> dict:
     """
     Generate charts for top scan results + open positions.
+    Reuses cached 15m candles from scan phase.
+    Fetches 1m and 1h in parallel.
     Returns {symbol: {"1m": "candles/BTC_USDT_1m.png", ...}}
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     clear_candles_dir()
 
-    chart_map = {}
-    symbols = [sr["symbol"] for sr in scan_results[:20]]
-    # Always include open positions even if not in top 20
+    # Build symbol list: top 20 + open positions
+    top_results = scan_results[:20]
+    symbols = [sr["symbol"] for sr in top_results]
     if open_position_symbols:
         for ops in open_position_symbols:
             if ops not in symbols:
                 symbols.append(ops)
 
-    for cidx, symbol in enumerate(symbols):
+    # Build cache of 15m candles from scan results
+    candles_cache = {}
+    for sr in scan_results:
+        cached = sr.get("_candles_15m")
+        if cached:
+            candles_cache[sr["symbol"]] = cached
+
+    def _generate_one(symbol):
+        """Fetch missing candles and generate all charts for one symbol."""
         short_name = symbol.split("/")[0].split(":")[0]
-        chart_map[symbol] = {}
+        result = {}
         for tf in TIMEFRAMES:
-            candles = exchange.get_ohlcv(symbol, tf, limit=CANDLE_LIMIT)
+            if tf == "15m" and symbol in candles_cache:
+                candles = candles_cache[symbol]
+            else:
+                candles = exchange.get_ohlcv(symbol, tf, limit=CANDLE_LIMIT)
             if not candles or len(candles) < 2:
                 continue
-            closes = [c[4] for c in candles]  # close price is index 4
+            closes = [c[4] for c in candles]
             overlap = OVERLAP_CANDLES.get(tf, 0)
             filename = generate_chart(closes, symbol, tf, overlap_candles=overlap)
             if filename:
-                chart_map[symbol][tf] = filename
-        logger.info(f"  [{cidx + 1}/{len(symbols)}] {short_name} — {len(chart_map[symbol])} charts")
+                result[tf] = filename
+        logger.info(f"  {short_name} — {len(result)} charts")
+        return symbol, result
+
+    chart_map = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = [pool.submit(_generate_one, sym) for sym in symbols]
+        for future in futures:
+            symbol, result = future.result()
+            chart_map[symbol] = result
 
     generated = sum(len(v) for v in chart_map.values())
     logger.info(f"Charts done: {generated} charts for {len(symbols)} symbols")

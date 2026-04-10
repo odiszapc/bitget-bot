@@ -174,7 +174,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         short_name = symbol.split("/")[0].split(":")[0]
         is_open = symbol in open_position_symbols
 
-        candles = exchange.get_ohlcv(symbol, timeframe, limit=100)
+        candles = exchange.get_ohlcv(symbol, timeframe, limit=150)  # 150 for chart reuse
         df = candles_to_dataframe(candles)
         if df is None:
             return None, "no_data", short_name
@@ -192,10 +192,11 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             "symbol": symbol,
             "volume_24h": quote_volume,
             "funding_rate": 0,
+            "_candles_15m": candles,  # cached for chart generation
             **analysis,
         }, "ok", short_name
 
-    workers = config.get("scan_threads", 5)
+    workers = config.get("scan_threads", 7)
     logger.info(f"Scanning {total_symbols} pairs ({workers} threads)...")
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
