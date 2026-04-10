@@ -266,8 +266,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 row_class = "scan-dim"
 
             base, quote = _format_symbol(sr["symbol"])
-            fr = sr.get("funding_rate", 0)
-
             rsi_class = "positive" if sr["rsi"] > 70 else ("warning" if sr["rsi"] > 60 else "")
 
             # Composite downtrend score
@@ -322,22 +320,23 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             r2_v = sr.get("r2", 0)
             dc_v = sr.get("dc", 1)
 
+            comp_sum = n_adx + n_slope + n_roc + n_ema
+
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="document.getElementById('{modal_id}').style.display='flex'"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
                 <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}</td>
-                <td class="{score_cls}"><b>{dt_score:.0f}</b></td>
-                <td class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
-                <td class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
-                <td class="{adx_dir_cls}">{adx_dir_v:+.1f}</td>
-                <td class="{slope_cls}">{slope_v:+.3f}</td>
-                <td class="{roc_cls}">{roc_v:+.2f}</td>
-                <td>{sr.get('ema_gap', 0):+.3f}</td>
-                <td class="{rsi_class}">{sr['rsi']:.1f}</td>
-                <td>{sr['atr_pct']:.1f}%</td>
-                <td>{fr*100:.4f}%</td>
-                <td class="{vol_cls}">{vol_str}</td>
-                <td class="comp-bars">{comp_bars}</td>
+                <td data-v="{dt_score}" class="{score_cls}"><b>{dt_score:.0f}</b></td>
+                <td data-v="{r2_v}" class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
+                <td data-v="{dc_v}" class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
+                <td data-v="{adx_dir_v}" class="{adx_dir_cls}">{adx_dir_v:+.1f}</td>
+                <td data-v="{slope_v}" class="{slope_cls}">{slope_v:+.3f}</td>
+                <td data-v="{roc_v}" class="{roc_cls}">{roc_v:+.2f}</td>
+                <td data-v="{sr.get('ema_gap', 0)}">{sr.get('ema_gap', 0):+.3f}</td>
+                <td data-v="{sr['rsi']}" class="{rsi_class}">{sr['rsi']:.1f}</td>
+                <td data-v="{sr['atr_pct']}">{sr['atr_pct']:.1f}%</td>
+                <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
+                <td data-v="{comp_sum}" class="comp-bars">{comp_bars}</td>
             </tr>"""
 
             # Build modal for this symbol
@@ -371,7 +370,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">ADX</span><span>{sr.get('adx', 0):.0f}</span></div>
             <div class="modal-stat"><span class="label">+DI</span><span>{sr.get('di_plus', 0):.0f}</span></div>
             <div class="modal-stat"><span class="label">-DI</span><span>{sr.get('di_minus', 0):.0f}</span></div>
-            <div class="modal-stat"><span class="label">Funding</span><span>{fr*100:.4f}%</span></div>
         </div>
         <div class="modal-trade-row">
             <button class="short-btn" onclick="doShort('{_esc(sr['symbol'])}', this)">OPEN SHORT</button>
@@ -416,22 +414,21 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         scan_section = f"""
 <h2>Market Scan ({len(sr_list)} pairs)</h2>
 <div class="table-wrap">
-<table>
+<table id="scan-table">
     <thead>
         <tr>
             <th>Symbol</th>
-            <th class="strategy-active">Score</th>
-            <th>R²</th>
-            <th>DC</th>
-            <th>ADX dir</th>
-            <th>Slope</th>
-            <th>ROC</th>
-            <th>EMA gap</th>
-            <th>RSI</th>
-            <th>ATR</th>
-            <th>Funding</th>
-            <th>Vol 24h</th>
-            <th style="min-width:120px">Components</th>
+            <th class="sortable strategy-active" data-col="1" data-dir="desc">Score</th>
+            <th class="sortable" data-col="2">R²</th>
+            <th class="sortable" data-col="3">DC</th>
+            <th class="sortable" data-col="4">ADX</th>
+            <th class="sortable" data-col="5">Slope</th>
+            <th class="sortable" data-col="6">ROC</th>
+            <th class="sortable" data-col="7">EMA</th>
+            <th class="sortable" data-col="8">RSI</th>
+            <th class="sortable" data-col="9">ATR</th>
+            <th class="sortable" data-col="10">Vol</th>
+            <th class="sortable" data-col="11" style="min-width:120px">Components</th>
         </tr>
     </thead>
     <tbody>
@@ -518,6 +515,32 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         color: #6e7681;
     }}
     th.strategy-active {{
+        color: #58a6ff;
+    }}
+    th.sortable {{
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+        padding-right: 18px;
+    }}
+    th.sortable:hover {{
+        color: #c9d1d9;
+    }}
+    th.sortable::after {{
+        content: "⇅";
+        position: absolute;
+        right: 4px;
+        font-size: 9px;
+        opacity: 0.3;
+    }}
+    th.sortable[data-dir="desc"]::after {{
+        content: "↓";
+        opacity: 0.8;
+        color: #58a6ff;
+    }}
+    th.sortable[data-dir="asc"]::after {{
+        content: "↑";
+        opacity: 0.8;
         color: #58a6ff;
     }}
     .scan-dim td.symbol {{
@@ -1530,6 +1553,36 @@ function refreshShorts() {{
         console.error("Shorts refresh error:", e);
     }});
 }}
+
+// Table sorting
+(function() {{
+    var table = document.getElementById("scan-table");
+    if (!table) return;
+    var headers = table.querySelectorAll("th.sortable");
+    headers.forEach(function(th) {{
+        th.addEventListener("click", function(e) {{
+            e.stopPropagation();
+            var col = parseInt(th.getAttribute("data-col"));
+            var curDir = th.getAttribute("data-dir");
+            var newDir = curDir === "desc" ? "asc" : "desc";
+            // Reset all headers
+            headers.forEach(function(h) {{ h.removeAttribute("data-dir"); }});
+            th.setAttribute("data-dir", newDir);
+            // Sort rows
+            var tbody = table.querySelector("tbody");
+            var rows = Array.from(tbody.querySelectorAll("tr"));
+            rows.sort(function(a, b) {{
+                var aCell = a.children[col];
+                var bCell = b.children[col];
+                if (!aCell || !bCell) return 0;
+                var aVal = parseFloat(aCell.getAttribute("data-v")) || 0;
+                var bVal = parseFloat(bCell.getAttribute("data-v")) || 0;
+                return newDir === "desc" ? bVal - aVal : aVal - bVal;
+            }});
+            rows.forEach(function(r) {{ tbody.appendChild(r); }});
+        }});
+    }});
+}})();
 
 // Toast notifications
 var _toastContainer;
