@@ -396,7 +396,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 </select>
             </div>
             <div class="trade-info">
-                <span class="label">Fee + BE</span>
+                <span class="label">Estimate</span>
                 <span class="fee-estimate" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001">—</span>
             </div>
         </div>
@@ -1359,22 +1359,30 @@ function openModal(id) {{
     }}
 }}
 
-// Update fee estimate when bet/tp changes
+// Update fee + profit estimate when bet/tp changes
 function updateExposure(sel, leverage) {{
     var row = sel.closest(".modal-trade-row");
     var betPct = parseInt(row.querySelector(".bet-pct-select").value);
     var tpRoi = parseFloat(row.querySelector(".tp-roi-select").value);
-    // Fee estimate
     var feeEl = row.querySelector(".fee-estimate");
     if (feeEl) {{
         var bal = parseFloat(feeEl.getAttribute("data-bal")) || 0;
         var lev = parseFloat(feeEl.getAttribute("data-lev")) || 10;
         var rate = parseFloat(feeEl.getAttribute("data-rate")) || 0.001;
         var margin = bal * betPct / 100;
-        var openFee = margin * lev * rate;
-        var totalFee = openFee * 2;
-        var bePct = rate * lev * 2 * 100;
-        feeEl.innerHTML = "~" + totalFee.toFixed(2) + " USDT <small style='color:#6e7681'>(" + bePct.toFixed(1) + "% ROI to BE)</small>";
+        var notional = margin * lev;
+        var tpPriceChg = tpRoi / lev / 100;
+        var openFee = notional * rate;
+        var closeNotional = notional * (1 - tpPriceChg);
+        var closeFee = closeNotional * rate;
+        var gross = notional * tpPriceChg;
+        var net = gross - openFee - closeFee;
+        var netRoi = margin > 0 ? (net / margin * 100) : 0;
+        var netCls = net >= 0 ? "color:#3fb950" : "color:#f85149";
+        feeEl.innerHTML = "Fee: " + (openFee + closeFee).toFixed(2) +
+            " &middot; Net: <span style='" + netCls + ";font-weight:700'>" +
+            (net >= 0 ? "+" : "") + net.toFixed(2) + " USDT (" +
+            (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + "% ROI)</span>";
     }}
 }}
 
