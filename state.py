@@ -39,7 +39,6 @@ def load_state() -> dict:
             if key not in state:
                 state[key] = value
 
-        logger.info(f"State LOADED from disk: {raw.strip()}")
         return state
 
     except (json.JSONDecodeError, IOError) as e:
@@ -49,15 +48,10 @@ def load_state() -> dict:
 
 def save_state(state: dict):
     """Save state to file."""
-    import traceback
     try:
         state["last_cycle_time"] = time.time()
-        raw = json.dumps(state, indent=2)
-        caller = traceback.extract_stack(limit=3)[0]
-        caller_info = f"{os.path.basename(caller.filename)}:{caller.lineno} {caller.name}"
-        logger.info(f"State SAVING to disk (from {caller_info}): {raw}")
         with open(STATE_FILE, "w") as f:
-            f.write(raw)
+            json.dump(state, f, indent=2)
     except IOError as e:
         logger.error(f"Error saving state: {e}")
 
