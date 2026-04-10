@@ -177,11 +177,14 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         r["n_ema"] = round(n_ema[i], 1)
         raw_score = 0.30 * n_adx[i] + 0.25 * n_slope[i] + 0.25 * n_roc[i] + 0.20 * n_ema[i]
         # Quality multiplier: R² (trend smoothness) × DC penalty (drop distribution)
-        # DC penalty only kicks in above 0.5: dc=0.5→no penalty, dc=1.0→score halved
+        # R² only counts for downtrends — zero for uptrends (slope >= 0)
         r2 = r.get("r2", 1.0)
+        slope = r.get("slope", 0)
+        effective_r2 = r2 if slope < 0 else 0.0
+        # DC penalty only kicks in above 0.5: dc=0.5→no penalty, dc=1.0→score halved
         dc = r.get("dc", 0.0)
         dc_penalty = 1.0 - max(0.0, dc - 0.5) * 2.0  # 1.0 at dc≤0.5, 0.0 at dc=1.0
-        quality = r2 * max(0.1, dc_penalty)  # floor 0.1 to never fully zero
+        quality = effective_r2 * max(0.1, dc_penalty)  # floor 0.1 to never fully zero
         r["downtrend_score"] = round(raw_score * quality, 1)
 
 
