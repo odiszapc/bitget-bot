@@ -1434,7 +1434,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 <body>
 
 <h1>Bitget Short Bot</h1>
-<div class="updated">Last updated: {now}</div>
+<div class="updated">Last updated: <span id="last-updated" data-utc="{now_iso}"></span></div>
 <div class="version">Ver: {_esc(_load_version())}</div>
 
 <div class="cards">
@@ -1524,6 +1524,16 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 {position_modals}
 
 <script>
+// Convert UTC timestamp to local time
+(function() {{
+    var el = document.getElementById("last-updated");
+    if (el) {{
+        var utc = el.getAttribute("data-utc");
+        var d = new Date(utc);
+        el.textContent = d.toLocaleString();
+    }}
+}})();
+
 (function() {{
     var cycleMinutes = {cycle_minutes_js};
     var generatedAt = new Date("{now_iso}");
