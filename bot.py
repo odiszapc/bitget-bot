@@ -203,7 +203,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             if avg_vol > 0:
                 volume_ratios.append(cur_vol / avg_vol)
 
-        funding_rate = exchange.get_funding_rate(symbol)
+        funding_rate = exchange.get_funding_rate(symbol) if active_strategy != "composite" else None
         all_analysis = analyze_all_strategies(df, funding_rate, config)
         active = all_analysis[active_strategy]
 
@@ -236,7 +236,6 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
             **{name: result for name, result in all_analysis.items()},
         })
 
-        time.sleep(0.1)
 
     # ── Step 7: Normalize composite scores and sort ──
     logger.info(f"Analysis done: {len(scan_results)} passed, {skipped_data} no data, {skipped_atr} high ATR")
