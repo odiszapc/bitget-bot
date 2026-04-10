@@ -234,7 +234,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
     # ── Step 7b: Generate charts for top pairs ──
     chart_map = {}
     if config.get("charts_enabled", False):
-        logger.info("Generating charts for top 20 pairs...")
+        logger.info("Generating charts...")
         try:
             chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols)
         except Exception as e:

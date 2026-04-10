@@ -124,13 +124,37 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict], open_positio
 
     clear_candles_dir()
 
-    # Build symbol list: top 20 + open positions
-    top_results = scan_results[:20]
-    symbols = [sr["symbol"] for sr in top_results]
+    # Build symbol set: top 20 per each metric + open positions
+    chart_symbols = set()
+
+    # Sort keys: (field, reverse) — reverse=True means highest first
+    sort_keys = [
+        ("downtrend_score", True),
+        ("r2", True),
+        ("adx_dir", True),
+        ("slope", False),       # most negative = best for short
+        ("roc_w", False),       # most negative = best for short
+        ("ema_gap", True),
+        ("rsi", True),
+        ("atr_pct", True),
+        ("volume_24h", True),
+    ]
+    for field, reverse in sort_keys:
+        sorted_by = sorted(scan_results, key=lambda s: s.get(field, 0), reverse=reverse)
+        for sr in sorted_by[:20]:
+            chart_symbols.add(sr["symbol"])
+
+    # Components sum
+    sorted_comp = sorted(scan_results, key=lambda s: s.get("n_adx", 0) + s.get("n_slope", 0) + s.get("n_roc", 0) + s.get("n_ema", 0), reverse=True)
+    for sr in sorted_comp[:20]:
+        chart_symbols.add(sr["symbol"])
+
+    # Always include open positions
     if open_position_symbols:
-        for ops in open_position_symbols:
-            if ops not in symbols:
-                symbols.append(ops)
+        chart_symbols.update(open_position_symbols)
+
+    symbols = list(chart_symbols)
+    logger.info(f"Chart symbols: {len(symbols)} unique (from top-20 per metric + open positions)")
 
     # Build cache of 15m candles from scan results
     candles_cache = {}

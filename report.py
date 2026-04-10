@@ -538,11 +538,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         opacity: 0.8;
         color: #58a6ff;
     }}
-    th.sortable[data-dir="asc"]::after {{
-        content: "↑";
-        opacity: 0.8;
-        color: #58a6ff;
-    }}
     .scan-dim td.symbol {{
         color: #6e7681;
     }}
@@ -1554,7 +1549,7 @@ function refreshShorts() {{
     }});
 }}
 
-// Table sorting
+// Table sorting (always DESC — best values first)
 (function() {{
     var table = document.getElementById("scan-table");
     if (!table) return;
@@ -1563,21 +1558,14 @@ function refreshShorts() {{
         th.addEventListener("click", function(e) {{
             e.stopPropagation();
             var col = parseInt(th.getAttribute("data-col"));
-            var curDir = th.getAttribute("data-dir");
-            var newDir = curDir === "desc" ? "asc" : "desc";
-            // Reset all headers
             headers.forEach(function(h) {{ h.removeAttribute("data-dir"); }});
-            th.setAttribute("data-dir", newDir);
-            // Sort rows
+            th.setAttribute("data-dir", "desc");
             var tbody = table.querySelector("tbody");
             var rows = Array.from(tbody.querySelectorAll("tr"));
             rows.sort(function(a, b) {{
-                var aCell = a.children[col];
-                var bCell = b.children[col];
-                if (!aCell || !bCell) return 0;
-                var aVal = parseFloat(aCell.getAttribute("data-v")) || 0;
-                var bVal = parseFloat(bCell.getAttribute("data-v")) || 0;
-                return newDir === "desc" ? bVal - aVal : aVal - bVal;
+                var aVal = parseFloat((a.children[col] || {{}}).getAttribute("data-v")) || 0;
+                var bVal = parseFloat((b.children[col] || {{}}).getAttribute("data-v")) || 0;
+                return bVal - aVal;
             }});
             rows.forEach(function(r) {{ tbody.appendChild(r); }});
         }});
