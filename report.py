@@ -378,7 +378,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
                 <td data-v="{sr.get('risk_score', 0)}" class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
                 <td data-v="{sr.get('approx_liq', 0)}">{sr.get('approx_liq', 0):.4g}</td>
-                <td data-v="{90 - sr.get('days_since_liq', -1) if sr.get('days_since_liq', -1) >= 0 else 0}">{f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "90d+"}</td>
+                <td data-v="{sr.get('days_since_liq', -1)}">{f"{sr.get('days_since_liq')}d ago" if 0 <= sr.get('days_since_liq', -1) < 90 else ("90d+" if sr.get('days_since_liq', -1) >= 90 else "—")}</td>
                 <td data-v="{comp_sum}" class="comp-bars">{comp_bars}</td>
             </tr>"""
 
@@ -410,7 +410,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">Risk</span><span class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}/10</span></div>
             <div class="modal-stat"><span class="label">Liq (~)</span><span>{sr.get('approx_liq', 0):.4g} (+{sr.get('liq_dist_pct', 0):.0f}%)</span></div>
-            <div class="modal-stat"><span class="label">Last@Liq</span><span>{f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "90d+"}</span></div>
+            <div class="modal-stat"><span class="label">Last@Liq</span><span>{f"{sr.get('days_since_liq')}d ago" if 0 <= sr.get('days_since_liq', -1) < 90 else ("90d+" if sr.get('days_since_liq', -1) >= 90 else "—")}</span></div>
         </div>
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">RSI</span><span class="{rsi_class}">{sr['rsi']:.1f}</span></div>
@@ -474,9 +474,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th class="sortable" data-col="8">RSI</th>
             <th class="sortable" data-col="9">ATR</th>
             <th class="sortable" data-col="10">Vol</th>
-            <th class="sortable" data-col="11">Risk</th>
+            <th class="sortable" data-col="11" data-sort="asc">Risk</th>
             <th class="sortable" data-col="12">Liq</th>
-            <th class="sortable" data-col="13">Last@Liq</th>
+            <th class="sortable" data-col="13" data-sort="desc">Last@Liq</th>
             <th class="sortable" data-col="14" style="min-width:120px">Components</th>
         </tr>
     </thead>
@@ -584,6 +584,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     th.sortable[data-dir="desc"]::after {{
         content: "↓";
+        opacity: 0.8;
+        color: #58a6ff;
+    }}
+    th.sortable[data-dir="asc"]::after {{
+        content: "↑";
         opacity: 0.8;
         color: #58a6ff;
     }}
@@ -1855,7 +1860,7 @@ function refreshShorts() {{
     }});
 }}
 
-// Table sorting (always DESC — best values first)
+// Table sorting — direction from data-sort attribute or default DESC
 (function() {{
     var table = document.getElementById("scan-table");
     if (!table) return;
@@ -1864,14 +1869,15 @@ function refreshShorts() {{
         th.addEventListener("click", function(e) {{
             e.stopPropagation();
             var col = parseInt(th.getAttribute("data-col"));
+            var dir = th.getAttribute("data-sort") || "desc";
             headers.forEach(function(h) {{ h.removeAttribute("data-dir"); }});
-            th.setAttribute("data-dir", "desc");
+            th.setAttribute("data-dir", dir);
             var tbody = table.querySelector("tbody");
             var rows = Array.from(tbody.querySelectorAll("tr"));
             rows.sort(function(a, b) {{
                 var aVal = parseFloat((a.children[col] || {{}}).getAttribute("data-v")) || 0;
                 var bVal = parseFloat((b.children[col] || {{}}).getAttribute("data-v")) || 0;
-                return bVal - aVal;
+                return dir === "asc" ? aVal - bVal : bVal - aVal;
             }});
             rows.forEach(function(r) {{ tbody.appendChild(r); }});
         }});
