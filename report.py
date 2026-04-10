@@ -1620,8 +1620,15 @@ function doShort(symbol, btn) {{
             var sym = o.symbol || symbol.split(":")[0];
             showToast(
                 "SHORT opened",
-                "<b>" + sym + "</b> &mdash; Margin: " + o.margin + " USDT &middot; TP: " + o.take_profit
+                "<b>" + sym + "</b><br>" +
+                "Entry: " + o.entry_price + " (fill)<br>" +
+                "TP: " + o.take_profit + " (" + (o.tp_change_pct >= 0 ? "-" : "") + o.tp_change_pct + "%)" +
+                (o.tp_adjusted ? ' <span style="color:#d29922">&#9888; adjusted</span>' : "") +
+                "<br>Margin: " + o.margin + " USDT"
             );
+            if (data.warning) {{
+                showToast("&#9888; Warning", data.warning, 8000);
+            }}
             refreshPositions();
             refreshShorts();
         }} else {{
@@ -1818,7 +1825,7 @@ function refreshShorts() {{
                 '<span class="close-sym ' + symCls + '">' + c.symbol + '</span>' +
                 '<span class="close-price">' + ep.toFixed(pp) + '</span>' +
                 '<span class="close-price ' + exitCls + '">' + xp.toFixed(pp) + '</span>' +
-                '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip">' + (function() {{ var of=c.open_fee||0, cf=c.close_fee||0, ff=c.funding_fee||0, cp=c.close_profit||0, pp=cp+ff-of-cf; function fv(v) {{ if(v===0) return "<span class=\"ft-zero\">  0.00000000</span>"; return v>0 ? "<span class=\"ft-pos\">+"+v.toFixed(8)+"</span>" : "<span class=\"ft-neg\">"+v.toFixed(8)+"</span>"; }} return "<b>Fee breakdown</b>" + "<div class=\"ft-row\"><span class=\"ft-label\">Closing profit</span>"+fv(cp)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Funding fee</span>"+fv(ff)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Opening fee</span>"+fv(-of)+"</div>" + "<div class=\"ft-row\"><span class=\"ft-label\">Closing fee</span>"+fv(-cf)+"</div>" + "<div class=\"ft-row ft-sep\"><span class=\"ft-label\">Position PnL</span>"+fv(pp)+"</div>"; }})() + '</span></span>' +
+                '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip">' + buildFeeTip(c.open_fee||0, c.close_fee||0, c.funding_fee||0, c.close_profit||0) + '</span></span>' +
                 '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
                 '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
                 '<span class="close-delta ' + bdCls + '">' + bdStr + '</span>' +
@@ -1855,6 +1862,23 @@ function refreshShorts() {{
         }});
     }});
 }})();
+
+// Fee breakdown tooltip builder
+function buildFeeTip(of, cf, ff, cp) {{
+    var pp = cp + ff - of - cf;
+    function fv(v) {{
+        if (v === 0) return '<span class="ft-zero">  0.00000000</span>';
+        return v > 0
+            ? '<span class="ft-pos">+' + v.toFixed(8) + '</span>'
+            : '<span class="ft-neg">' + v.toFixed(8) + '</span>';
+    }}
+    return '<b>Fee breakdown</b>' +
+        '<div class="ft-row"><span class="ft-label">Closing profit</span>' + fv(cp) + '</div>' +
+        '<div class="ft-row"><span class="ft-label">Funding fee</span>' + fv(ff) + '</div>' +
+        '<div class="ft-row"><span class="ft-label">Opening fee</span>' + fv(-of) + '</div>' +
+        '<div class="ft-row"><span class="ft-label">Closing fee</span>' + fv(-cf) + '</div>' +
+        '<div class="ft-row ft-sep"><span class="ft-label">Position PnL</span>' + fv(pp) + '</div>';
+}}
 
 // Auto-refresh on page load
 refreshPositions();

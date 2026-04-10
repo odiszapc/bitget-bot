@@ -93,47 +93,70 @@ def api_short():
             return jsonify({"ok": False, "error": "Zero balance"}), 400
 
         margin = round(balance * bet_pct / 100, 2)
-
-        # Get entry price
-        ticker = exchange.get_ticker(symbol)
-        if not ticker:
-            return jsonify({"ok": False, "error": f"Could not fetch ticker for {symbol}"}), 400
-
-        entry_price = ticker["last"]
         leverage = config.get("leverage", 10)
-
-        # Calculate TP from selected ROI %
-        # ROI = price_change% * leverage → price_change% = ROI / leverage
-        tp_price_pct = tp_roi_pct / leverage
-        tp_price = entry_price * (1 - tp_price_pct / 100)  # SHORT: TP below entry
-        tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
-
-        # Safety: TP must be at least 1 tick below entry
         tick_size = exchange.get_tick_size(symbol)
-        if tp_price >= entry_price:
-            tp_price = entry_price - tick_size
-            tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
-            logger.warning(f"TP adjusted to entry - 1 tick: {tp_price} (tick={tick_size})")
 
-        # Open short with TP only
-        position = exchange.open_short_tp_only(symbol, margin, tp_price)
+        # Step 1: Open short WITHOUT TP
+        position = exchange.open_short_no_tp(symbol, margin)
         if not position:
             return jsonify({"ok": False, "error": "Exchange rejected the order"}), 500
+
+        fill_price = position["entry_price"]
+
+        # Step 2: Calculate TP from REAL fill price
+        tp_price_pct = tp_roi_pct / leverage
+        tp_price = fill_price * (1 - tp_price_pct / 100)
+        tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
+
+        # Safety: TP must be at least 1 tick below fill
+        tp_adjusted = False
+        if tp_price >= fill_price:
+            tp_price = float(exchange.exchange.price_to_precision(symbol, fill_price - tick_size))
+            tp_adjusted = True
+            logger.warning(f"TP adjusted to fill - 1 tick: {tp_price} (fill={fill_price}, tick={tick_size})")
+
+        # Step 3: Set TP with retry
+        tp_set = False
+        for attempt in range(3):
+            if exchange.set_take_profit(symbol, tp_price, position["amount"]):
+                tp_set = True
+                break
+            logger.warning(f"TP retry {attempt + 1}/3 for {symbol}")
+            import time as _time
+            _time.sleep(1)
+
+        position["take_profit"] = tp_price
 
         # Save to state
         state = load_state()
         add_position(state, position)
 
-        logger.info(f"Manual SHORT opened: {symbol} margin={margin} ({bet_pct}% of {balance:.2f}) TP={tp_price} (ROI {tp_roi_pct}%)")
+        warning = None
+        if not tp_set:
+            # Save pending TP for bot cycle recovery
+            state.setdefault("pending_tp", {})[symbol] = {
+                "tp_price": tp_price,
+                "amount": position["amount"],
+                "timestamp": time.time(),
+            }
+            save_state(state)
+            warning = "TP failed to set — will retry next cycle"
+            logger.error(f"TP failed after 3 retries for {symbol}")
+
+        tp_change_pct = round((fill_price - tp_price) / fill_price * 100, 2)
+        logger.info(f"Manual SHORT opened: {symbol} fill={fill_price} TP={tp_price} ({tp_change_pct}%) margin={margin} ({bet_pct}% of {balance:.2f})")
 
         return jsonify({
             "ok": True,
+            "warning": warning,
             "order": {
                 "symbol": symbol.split(":")[0],
-                "entry_price": position["entry_price"],
+                "entry_price": fill_price,
                 "amount": position["amount"],
                 "margin": margin,
                 "take_profit": tp_price,
+                "tp_change_pct": tp_change_pct,
+                "tp_adjusted": tp_adjusted,
                 "order_id": position["order_id"],
             }
         })

@@ -51,9 +51,15 @@ class Exchange:
             self.api_call_count += 1
             try:
                 t0 = time.time()
+                # Log request details for trading operations
+                if method == "create_order":
+                    logger.info(f"API REQUEST {method}{sym}: args={args[1:]} kwargs={kwargs}")
                 result = getattr(self.exchange, method)(*args, **kwargs)
                 elapsed = (time.time() - t0) * 1000
-                logger.debug(f"API #{self.api_call_count} {method}{sym} {elapsed:.0f}ms")
+                if method == "create_order":
+                    logger.info(f"API RESPONSE {method}{sym} {elapsed:.0f}ms: {result}")
+                else:
+                    logger.debug(f"API #{self.api_call_count} {method}{sym} {elapsed:.0f}ms")
                 return result
             except (ccxt.RateLimitExceeded, ccxt.DDoSProtection) as e:
                 wait = (attempt + 1) * 2  # 2s, 4s, 6s
@@ -356,6 +362,92 @@ class Exchange:
         except Exception as e:
             logger.error(f"Error opening manual short for {symbol}: {e}")
             return None
+
+    def open_short_no_tp(
+        self,
+        symbol: str,
+        amount_usdt: float,
+    ) -> Optional[dict]:
+        """
+        Open a short position WITHOUT TP.
+        Returns fill price from order response for accurate TP calculation.
+        """
+        try:
+            self.set_margin_mode(symbol, "cross")
+            self.set_leverage(symbol, self.leverage)
+
+            ticker = self.get_ticker(symbol)
+            if not ticker:
+                return None
+
+            current_price = ticker["last"]
+
+            position_value = amount_usdt * self.leverage
+            amount = position_value / current_price
+
+            market = self.exchange.markets.get(symbol)
+            if market:
+                amount = self.exchange.amount_to_precision(symbol, amount)
+                amount = float(amount)
+
+            logger.info(
+                f"Opening SHORT (no TP) {symbol}: amount={amount}, "
+                f"price={current_price}"
+            )
+
+            order = self._api_call("create_order",
+                symbol=symbol,
+                type="market",
+                side="sell",
+                amount=amount,
+                params={
+                    "tradeSide": "open",
+                },
+            )
+
+            # Get actual fill price from order response
+            fill_price = float(order.get("average", 0) or order.get("price", 0) or current_price)
+
+            return {
+                "order_id": order["id"],
+                "symbol": symbol,
+                "side": "short",
+                "entry_price": fill_price,
+                "amount": amount,
+                "margin_usdt": amount_usdt,
+                "stop_loss": 0,
+                "take_profit": 0,
+                "timestamp": time.time(),
+            }
+
+        except Exception as e:
+            logger.error(f"Error opening short (no TP) for {symbol}: {e}")
+            return None
+
+    def set_take_profit(self, symbol: str, tp_price: float, amount: float) -> bool:
+        """Set TP on an existing position via plan order."""
+        try:
+            tp_price = float(self.exchange.price_to_precision(symbol, tp_price))
+            amount = float(self.exchange.amount_to_precision(symbol, amount))
+
+            self._api_call("create_order",
+                symbol=symbol,
+                type="market",
+                side="buy",
+                amount=amount,
+                params={
+                    "tradeSide": "close",
+                    "triggerPrice": str(tp_price),
+                    "triggerType": "mark_price",
+                    "orderType": "market",
+                    "planType": "profit_plan",
+                },
+            )
+            logger.info(f"TP set for {symbol}: {tp_price}")
+            return True
+        except Exception as e:
+            logger.error(f"Error setting TP for {symbol}: {e}")
+            return False
 
     def update_stop_loss(self, symbol: str, new_sl_price: float) -> bool:
         """Update stop-loss for an open position."""

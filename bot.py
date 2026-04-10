@@ -105,6 +105,28 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool)
         [p for p in exchange_positions if p["side"] == "short"]
     )
 
+    # ── Step 2b: Recover pending TP ──
+    pending_tp = state.get("pending_tp", {})
+    exchange_symbols = {p["symbol"] for p in exchange_positions if p["side"] == "short"}
+    for sym, info in list(pending_tp.items()):
+        if sym not in exchange_symbols:
+            logger.info(f"Pending TP: {sym} position closed, removing")
+            del pending_tp[sym]
+            continue
+        tp_sl = exchange.get_tp_sl_for_symbol(sym)
+        if tp_sl.get("tp"):
+            logger.info(f"Pending TP: {sym} TP already set, removing")
+            del pending_tp[sym]
+            continue
+        logger.info(f"Pending TP: setting TP for {sym} at {info['tp_price']}")
+        if exchange.set_take_profit(sym, info["tp_price"], info["amount"]):
+            del pending_tp[sym]
+            logger.info(f"Pending TP: {sym} TP set successfully")
+        else:
+            logger.error(f"Pending TP: {sym} TP still failed, will retry next cycle")
+    if pending_tp != state.get("pending_tp", {}):
+        save_state(state)
+
     # ── Step 3: Manage trailing stops ──
     manage_trailing_stops(exchange, state, exchange_positions)
 
