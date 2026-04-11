@@ -214,6 +214,18 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
 
         analysis = analyze_symbol(df, config)
 
+        # Fetch 1h candles for higher timeframe confirmation
+        candles_1h = exchange.get_ohlcv(symbol, '1h', limit=150)
+        df_1h = candles_to_dataframe(candles_1h)
+        if df_1h is not None:
+            from strategy import _slope_and_r2 as slope_r2
+            slope_1h, r2_1h = slope_r2(df_1h, min(150, len(df_1h)))
+            analysis["slope_1h"] = slope_1h
+            analysis["r2_1h"] = r2_1h
+        else:
+            analysis["slope_1h"] = 0
+            analysis["r2_1h"] = 0
+
         ticker_data = tickers.get(symbol, {})
         quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)
         tick_size = exchange.get_tick_size(symbol)
@@ -250,7 +262,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
             **analysis,
         }, "ok", short_name
 
-    workers = config.get("scan_threads", 7)
+    workers = config.get("scan_threads", 5)
     logger.info(f"Scanning {total_symbols} pairs ({workers} threads)...")
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -283,7 +295,8 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
             f"  {marker} {sr['symbol'].split(':')[0]}: "
             f"score={score:.0f} R²={sr.get('r2',0):.2f} DC={sr.get('dc',0):.2f} RSI={sr['rsi']:.1f} ATR={sr['atr_pct']:.1f}% "
             f"ADXdir={sr.get('adx_dir',0):+.1f} slope={sr.get('slope',0):+.3f} "
-            f"ROC={sr.get('roc_w',0):+.2f} EMA={sr.get('ema_gap',0):+.3f}"
+            f"ROC={sr.get('roc_w',0):+.2f} EMA={sr.get('ema_gap',0):+.3f} "
+            f"1h:slope={sr.get('slope_1h',0):+.3f} R2={sr.get('r2_1h',0):.2f}"
         )
 
     # ── Step 7b: Generate charts for top pairs ──

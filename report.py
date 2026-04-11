@@ -421,6 +421,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <div class="modal-stat"><span class="label">Slope</span><span class="{slope_cls}">{slope_v:+.3f}</span></div>
             <div class="modal-stat"><span class="label">ROC</span><span class="{roc_cls}">{roc_v:+.2f}</span></div>
             <div class="modal-stat"><span class="label">EMA gap</span><span>{sr.get('ema_gap', 0):+.3f}</span></div>
+            <div class="modal-stat"><span class="label">1h Slope</span><span class="{'positive' if sr.get('slope_1h', 0) < -0.01 else ('negative' if sr.get('slope_1h', 0) > 0.01 else 'muted')}">{sr.get('slope_1h', 0):+.3f}</span></div>
+            <div class="modal-stat"><span class="label">1h R²</span><span>{sr.get('r2_1h', 0):.2f}</span></div>
         </div>
         <div class="modal-stats">
             <div class="modal-stat"><span class="label">Risk</span><span class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}/10</span></div>

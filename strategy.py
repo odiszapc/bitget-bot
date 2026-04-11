@@ -184,7 +184,11 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         # DC penalty only kicks in above 0.5: dc=0.5→no penalty, dc=1.0→score halved
         dc = r.get("dc", 0.0)
         dc_penalty = 1.0 - max(0.0, dc - 0.5) * 2.0  # 1.0 at dc≤0.5, 0.0 at dc=1.0
-        quality = effective_r2 * max(0.1, dc_penalty)  # floor 0.1 to never fully zero
+        # 1h quality: slope_1h >= 0 → uptrend on higher TF → kill score
+        slope_1h = r.get("slope_1h", 0)
+        r2_1h = r.get("r2_1h", 0)
+        quality_1h = r2_1h if slope_1h < 0 else 0.0
+        quality = effective_r2 * max(0.1, dc_penalty) * max(0.1, quality_1h)
         r["downtrend_score"] = round(raw_score * quality, 1)
 
 
