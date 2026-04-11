@@ -29,19 +29,27 @@ Single score 0-100 ranking how strongly a pair is trending down:
 **Formula:** `score = raw_score * effective_r2 * dc_penalty`
 
 ### Entry Criteria (auto-trade)
-- Highest `downtrend_score >= min_downtrend_score` (default 70)
-- `risk_score <= max_risk_score` (default 3)
+- Take top N pairs by score (`auto_top_n`, default 3)
+- First one with `risk_score <= max_risk_score` (default 3)
 - No existing position on that symbol
 - All safety checks passed (BTC trend, position count)
 
 ### Risk Score (0-10)
 Based on **days since price was last above liquidation level** (from 90 daily candles):
+
+**Price was above liq:**
 - 1-3 days ago → 10 (extreme risk)
 - 4-14 days → 5
 - 15-30 days → 4
 - 31-60 days → 3
 - 61-90 days → 2
-- Never in 90d → 1 (safest)
+
+**Price never above liq (scaled by available history):**
+- 60-90 days checked → 1 (solid history, safe)
+- 30-59 days checked → 2
+- 14-29 days checked → 4
+- <14 days checked → 8 (too little data, risky)
+- No data → 10
 
 Uses approximate liquidation price: `liq = (free_balance + notional) / (contracts * (1 + keepMarginRate))`
 `keepMarginRate` varies per pair (0.4% BTC — 5% PHB), fetched from leverage tiers.
@@ -199,8 +207,13 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Charts parallelized with ThreadPoolExecutor (5 threads)
 - Charts generated for union of top-20 per each metric + open positions
 - 90d daily candles fetched for chart symbols to calculate risk score
+- Risk score for "never found" scales by checked days (<14d = risk 8, 60-90d = risk 1)
+- `days_since_liq` encoding: 0-999 = found X days ago, 1000+ = never (checked N-1000 days)
 - API server caches Exchange instance (load_markets once)
 - TP/SL fetched once during sync, not duplicated in position builder
+- Cycle status: `output/cycle_status.json` written by CycleStatus (thread-safe with Lock)
+- Frontend polls cycle_status.json for live progress (2s active, 10s idle)
+- Responsive: mobile layout stacks panels vertically at ≤768px
 - f-string gotcha: ternary inside format spec must be wrapped in nested f""
 - JS in report.py: avoid unicode escapes, use named functions instead of IIFEs
 - CSS specificity: `.close-sym.negative` needed to override `.close-sym { color }`
