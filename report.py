@@ -1470,20 +1470,24 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="value neutral">{current_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
     <div class="card">
-        <div class="label">Total PnL</div>
-        <div class="value {total_class}">{total_pnl:+.2f} <small style="font-size:12px">USDT ({total_pnl_pct:+.1f}%)</small></div>
+        <div class="label">Active Trades</div>
+        <div class="value neutral">{len(pos_data)} <small style="font-size:12px;color:#6e7681">/ {max_positions}</small></div>
     </div>
     <div class="card">
-        <div class="label">Trades</div>
-        <div class="value neutral">{total_trades}{f' <small style="font-size:12px;color:#6e7681">(days: {days_since_start})</small>' if start_date_str else ""}</div>
+        <div class="label">Unrealized PnL</div>
+        <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
         <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT{f" ({start_date_display})" if start_date_display else ""}</small></div>
     </div>
     <div class="card">
-        <div class="label">Unrealized PnL</div>
-        <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
+        <div class="label">Total Trades</div>
+        <div class="value neutral">{total_trades}{f' <small style="font-size:12px;color:#6e7681">(days: {days_since_start})</small>' if start_date_str else ""}</div>
+    </div>
+    <div class="card">
+        <div class="label">Total PnL</div>
+        <div class="value {total_class}">{total_pnl:+.2f} <small style="font-size:12px">USDT ({total_pnl_pct:+.1f}%)</small></div>
     </div>
     <div class="card card-settings">
         <div class="label">TP (ROI)</div>
