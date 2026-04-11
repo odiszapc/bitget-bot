@@ -149,7 +149,9 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Page auto-reloads when new Ready detected (updated_at changed)
 
 ### Dashboard Features
-- **Cards**: Balance → Active Trades (N/max) → Unrealized PnL → Start Balance → Total Trades → Total PnL → TP/SL/Auto Bet Size
+- **Cards**: Balance → Active Trades → Unrealized PnL → Est. Balance at TP → Start Balance → Total Trades → Total PnL → TP/SL/Auto Bet Size
+- **Balance note**: Bitget `total` = wallet + unrealized PnL. `free = total - margin`. To get wallet: `total - unrealized`
+- **Est. Balance at TP**: `wallet + sum(gross_at_tp - close_fee)` per position. Open fee/funding already in wallet.
 - **Cycle status**: live progress bar + phase name (replaces countdown timer)
 - Auto-refresh Open Positions and Recent Shorts on page load
 - Manual refresh buttons with spinning icon
