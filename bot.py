@@ -379,7 +379,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
     # ── Step 8: Execute trade (only if safe) ──
     max_risk = config.get("max_risk_score", 3)
     default_tp_roi = config.get("auto_tp_roi_pct", 3.0)
-    top_n = config.get("auto_top_n", 3)
+    top_n = config.get("auto_top_n", 10)
     top_candidates = scan_results[:top_n]
     candidates = [
         s for s in top_candidates
