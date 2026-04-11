@@ -1471,7 +1471,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
     <div class="card">
         <div class="label">Active Trades</div>
-        <div class="value positive">{len(pos_data)}</div>
+        <div class="value {'positive' if len(pos_data) > 0 else 'muted'}">{len(pos_data)}</div>
     </div>
     <div class="card">
         <div class="label">Unrealized PnL</div>
