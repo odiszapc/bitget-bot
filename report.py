@@ -205,7 +205,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             potential_net = pnl - fee - close_fee_est
             net_cls = "positive" if potential_net >= 0 else "negative"
             pp = op.get("price_precision", 4)
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-bal-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
 
         # Closed shorts with entry/exit/fees/net
         prev_bal = None
@@ -266,7 +266,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 f'<div class="ft-row"><span class="ft-label">Closing fee</span>{_fv(-cf)}</div>'
                 f'<div class="ft-row ft-sep"><span class="ft-label">Position PnL</span>{_fv(pos_pnl)}</div>'
             )
-            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip">{fee_popup}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip">{fee_popup}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-bal-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
 
         if shorts_rows:
             closes_section = f"""
@@ -788,6 +788,12 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         .cycle-panel, .closes-panel {{
             min-width: unset;
         }}
+        .close-price, .close-fee, .close-bal-delta {{
+            display: none;
+        }}
+        .close-sym {{
+            white-space: nowrap;
+        }}
     }}
     .cycle-panel {{
         background: #161b22;
@@ -923,7 +929,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         text-align: right;
         color: #8b949e;
     }}
-    .close-delta {{
+    .close-delta, .close-bal-delta {{
         width: 70px;
         text-align: right;
         font-weight: 600;
@@ -1879,7 +1885,7 @@ function refreshShorts() {{
                 '<span class="close-fee">' + fee.toFixed(3) + '</span>' +
                 '<span class="close-delta ' + netCls + '">' + (potNet >= 0 ? "+" : "") + potNet.toFixed(3) + '</span>' +
                 '<span class="close-bal close-bal-open">' + balance.toFixed(2) + '</span>' +
-                '<span class="close-delta muted">\u2014</span>' +
+                '<span class="close-bal-delta muted">\u2014</span>' +
                 '<span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
         }}
 
@@ -1924,7 +1930,7 @@ function refreshShorts() {{
                 '<span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">' + fees.toFixed(3) + '</span><span class="fee-tip">' + buildFeeTip(c.open_fee||0, c.close_fee||0, c.funding_fee||0, c.close_profit||0) + '</span></span>' +
                 '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
                 '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
-                '<span class="close-delta ' + bdCls + '">' + bdStr + '</span>' +
+                '<span class="close-bal-delta ' + bdCls + '">' + bdStr + '</span>' +
                 '<span class="close-time">' + timeStr + '</span></div>';
         }}
 
