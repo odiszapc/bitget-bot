@@ -581,11 +581,15 @@ class Exchange:
                         elif info.get('tradeSide') == 'close':
                             closes.append(d)
 
+                    # Sort by time to pair correctly
+                    opens.sort(key=lambda x: x['time'])
+                    closes.sort(key=lambda x: x['time'])
+
                     for i, op in enumerate(opens):
                         cl = closes[i] if i < len(closes) else None
                         if not cl:
                             continue
-                        dur_sec = (cl['time'] - op['time']) / 1000
+                        dur_sec = max(0, (cl['time'] - op['time']) / 1000)
 
                         # Fee breakdown
                         sym_bills = bills_by_sym.get(sym, [])
