@@ -101,7 +101,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             position_rows += f"""
             <tr class="pos-row scan-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'"
                 data-symbol="{_esc(p['base'])}/{_esc(p['quote'])}" data-1m="{p_1m}" data-15m="{p_15m}" data-1h="{p_1h}">
-                <td class="symbol">{_esc(p['base'])}<span class="quote">/{_esc(p['quote'])}</span></td>
+                <td class="symbol">{_esc(p['base'])}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
@@ -1868,7 +1868,7 @@ function refreshPositions() {{
             var marginPct = Math.round(p.margin / bal * 100);
 
             html += '<tr class="pos-row">' +
-                '<td class="symbol">' + p.base + '<span class="quote">/' + p.quote + '</span></td>' +
+                '<td class="symbol">' + p.base + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + fmtP(p.entry_price) + '</td>' +
                 '<td>' + fmtP(p.current_price) + '</td>' +
