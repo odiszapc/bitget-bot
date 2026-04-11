@@ -1780,43 +1780,45 @@ function doShort(symbol, btn) {{
     }});
 }}
 
-// Preview panel on hover
+// Preview panel on hover (event delegation — works with dynamically added rows)
 (function() {{
     var panel = document.getElementById("preview-panel");
     var symEl = document.getElementById("preview-symbol");
     var chartsEl = document.getElementById("preview-charts");
     if (!panel) return;
 
-    var rows = document.querySelectorAll(".scan-row");
-    rows.forEach(function(row) {{
-        row.addEventListener("mouseenter", function() {{
-            var symbol = row.getAttribute("data-symbol") || "";
-            var tfs = [
-                ["1 min", row.getAttribute("data-1m")],
-                ["15 min", row.getAttribute("data-15m")],
-                ["1 hour", row.getAttribute("data-1h")]
-            ];
-            symEl.textContent = symbol;
-            chartsEl.innerHTML = "";
-            var hasAny = false;
-            tfs.forEach(function(tf) {{
-                if (tf[1]) {{
-                    hasAny = true;
-                    var div = document.createElement("div");
-                    div.className = "preview-chart";
-                    div.innerHTML = '<div class="preview-chart-label">' + tf[0] + '</div><img src="' + tf[1] + '">';
-                    chartsEl.appendChild(div);
-                }}
-            }});
-            if (!hasAny) {{
-                chartsEl.innerHTML = '<div class="preview-empty">No charts</div>';
+    document.addEventListener("mouseenter", function(e) {{
+        var row = e.target.closest(".scan-row");
+        if (!row) return;
+        var symbol = row.getAttribute("data-symbol") || "";
+        var tfs = [
+            ["1 min", row.getAttribute("data-1m")],
+            ["15 min", row.getAttribute("data-15m")],
+            ["1 hour", row.getAttribute("data-1h")]
+        ];
+        symEl.textContent = symbol;
+        chartsEl.innerHTML = "";
+        var hasAny = false;
+        tfs.forEach(function(tf) {{
+            if (tf[1]) {{
+                hasAny = true;
+                var div = document.createElement("div");
+                div.className = "preview-chart";
+                div.innerHTML = '<div class="preview-chart-label">' + tf[0] + '</div><img src="' + tf[1] + '">';
+                chartsEl.appendChild(div);
             }}
-            panel.classList.add("visible");
         }});
-        row.addEventListener("mouseleave", function() {{
-            panel.classList.remove("visible");
-        }});
-    }});
+        if (!hasAny) {{
+            chartsEl.innerHTML = '<div class="preview-empty">No charts</div>';
+        }}
+        panel.classList.add("visible");
+    }}, true);
+
+    document.addEventListener("mouseleave", function(e) {{
+        var row = e.target.closest(".scan-row");
+        if (!row) return;
+        panel.classList.remove("visible");
+    }}, true);
 }})();
 
 // Refresh positions table
