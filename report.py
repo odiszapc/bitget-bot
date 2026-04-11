@@ -196,12 +196,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
     <div class="checks">{checks_html}</div>
     <div class="outcome {outcome_class}">{_esc(outcome)}</div>
-    <div class="countdown-row">
-        <span class="countdown-label" id="cycle-phase">Ready</span>
-        <div class="cycle-progress" id="cycle-progress" style="display:none">
-            <div class="cycle-progress-bar" id="cycle-progress-bar"></div>
-        </div>
-    </div>
 </div>
 """
 
@@ -1021,31 +1015,47 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         padding: 8px 0;
         border-top: 1px solid #21262d;
     }}
-    .countdown-row {{
+    .status-bar {{
         display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding-top: 10px;
-        border-top: 1px solid #21262d;
-        margin-top: 8px;
-    }}
-    .countdown-label {{
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        margin-bottom: 16px;
+        background: #161b22;
+        border: 1px solid #21262d;
+        border-radius: 8px;
         font-size: 13px;
+    }}
+    .status-dot {{
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #3fb950;
+        flex-shrink: 0;
+    }}
+    .status-dot.active {{
+        background: #58a6ff;
+        animation: dot-pulse 1.5s ease-in-out infinite;
+    }}
+    .status-dot.error {{
+        background: #f85149;
+    }}
+    .status-text {{
         color: #8b949e;
         font-weight: 600;
     }}
-    .cycle-progress {{
+    .status-progress {{
         flex: 1;
-        height: 6px;
+        height: 4px;
         background: #21262d;
-        border-radius: 3px;
+        border-radius: 2px;
         overflow: hidden;
-        max-width: 200px;
+        max-width: 300px;
     }}
-    .cycle-progress-bar {{
+    .status-progress-bar {{
         height: 100%;
         background: linear-gradient(90deg, #1f6feb, #58a6ff);
-        border-radius: 3px;
+        border-radius: 2px;
         transition: width 0.5s ease;
         width: 0%;
     }}
@@ -1485,6 +1495,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 <div class="updated">Last updated: <span id="last-updated" data-utc="{now_iso}"></span></div>
 <div class="version">Ver: {_esc(_load_version())}</div>
 
+<div class="status-bar" id="status-bar">
+    <span class="status-dot" id="status-dot"></span>
+    <span class="status-text" id="cycle-phase">Ready</span>
+    <div class="status-progress" id="cycle-progress" style="display:none">
+        <div class="status-progress-bar" id="cycle-progress-bar"></div>
+    </div>
+</div>
+
 <div class="cards">
     <div class="card">
         <div class="label">Balance</div>
@@ -1599,11 +1617,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     var phaseEl = document.getElementById("cycle-phase");
     var progressWrap = document.getElementById("cycle-progress");
     var progressBar = document.getElementById("cycle-progress-bar");
+    var dotEl = document.getElementById("status-dot");
     if (!phaseEl) return;
 
     var initialReadyAt = null;
     var pollInterval = 10000;
     var pollTimer = null;
+
+    function setStatus(text, state) {{
+        phaseEl.textContent = text;
+        dotEl.className = "status-dot" + (state === "active" ? " active" : (state === "error" ? " error" : ""));
+    }}
 
     function poll() {{
         fetch("/cycle_status.json?" + Date.now())
@@ -1618,34 +1642,26 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
             if (phase === "Ready") {{
                 if (initialReadyAt === null) {{
-                    // First load — remember this ready timestamp
                     initialReadyAt = updatedAt;
-                    phaseEl.textContent = "Ready";
-                    phaseEl.style.color = "#3fb950";
+                    setStatus("Ready", "ready");
                     progressWrap.style.display = "none";
                     setPollRate(10000);
                 }} else if (updatedAt !== initialReadyAt) {{
-                    // New ready — page is stale, reload
                     location.reload();
                 }} else {{
-                    // Same ready — idle
-                    phaseEl.textContent = "Ready";
-                    phaseEl.style.color = "#3fb950";
+                    setStatus("Ready", "ready");
                     progressWrap.style.display = "none";
                     setPollRate(10000);
                 }}
             }} else {{
-                // Active cycle
-                phaseEl.textContent = phase + " " + progress + "%";
-                phaseEl.style.color = "#58a6ff";
+                setStatus(phase + " " + progress + "%", "active");
                 progressWrap.style.display = "block";
                 progressBar.style.width = progress + "%";
                 setPollRate(2000);
             }}
         }})
         .catch(function(e) {{
-            phaseEl.textContent = "Status unavailable";
-            phaseEl.style.color = "#f85149";
+            setStatus("Status unavailable", "error");
             progressWrap.style.display = "none";
             setPollRate(10000);
         }});
