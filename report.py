@@ -229,7 +229,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             potential_net = pnl - fee - close_fee_est
             net_cls = "positive" if potential_net >= 0 else "negative"
             pp = op.get("price_precision", 4)
-            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-bal-delta muted">—</span><span class="close-time">{op["opened_short_str"]}</span></div>\n'
+            # Duration for open position
+            open_ts = op.get("opened_ts", 0)
+            if open_ts > 0:
+                _dur_sec = (now_dt.timestamp() - open_ts)
+                _dur_str = f"{int(_dur_sec // 86400)}d" if _dur_sec >= 86400 else (f"{int(_dur_sec // 3600)}h" if _dur_sec >= 3600 else f"{int(_dur_sec // 60)}m")
+            else:
+                _dur_str = "—"
+            shorts_rows += f'<div class="close-row close-open"><span class="close-sym">{sym} <span class="pos-dot"></span></span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price muted">—</span><span class="close-fee">{fee:.3f}</span><span class="close-delta {net_cls}">{potential_net:+.3f}</span><span class="close-bal close-bal-open">{current_balance:.2f}</span><span class="close-bal-delta muted">—</span><span class="close-time"><span class="time-full">{op["opened_short_str"]}</span><span class="time-short">{_dur_str}</span></span></div>\n'
 
         # Closed shorts with entry/exit/fees/net
         prev_bal = None
@@ -242,13 +249,15 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             bal = rc.get("balance", 0)
             dur_sec = rc.get("duration_sec", 0)
 
-            # Format duration
+            # Format duration (integer, floor)
             if dur_sec < 60:
-                dur_str = f"{dur_sec:.0f}s"
+                dur_str = f"{int(dur_sec)}s"
             elif dur_sec < 3600:
-                dur_str = f"{dur_sec / 60:.0f}m"
+                dur_str = f"{int(dur_sec // 60)}m"
+            elif dur_sec < 86400:
+                dur_str = f"{int(dur_sec // 3600)}h"
             else:
-                dur_str = f"{dur_sec / 3600:.1f}h"
+                dur_str = f"{int(dur_sec // 86400)}d"
 
             dt = datetime.fromtimestamp(rc["timestamp"], tz=timezone.utc)
             time_str = f"{dt.strftime('%b-%d %H:%M')} ({dur_str})"
@@ -290,7 +299,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 f'<div class="ft-row"><span class="ft-label">Closing fee</span>{_fv(-cf)}</div>'
                 f'<div class="ft-row ft-sep"><span class="ft-label">Position PnL</span>{_fv(pos_pnl)}</div>'
             )
-            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip">{fee_popup}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-bal-delta {delta_cls}">{delta_str}</span><span class="close-time">{time_str}</span></div>\n'
+            shorts_rows += f'<div class="close-row"><span class="close-sym {sym_cls}">{sym}</span><span class="close-price">{entry_p:.{pp}f}</span><span class="close-price {exit_cls}">{exit_p:.{pp}f}</span><span class="close-fee fee-tip-wrap"><span class="fee-tip-trigger">{fees:.3f}</span><span class="fee-tip">{fee_popup}</span></span><span class="close-delta {net_cls}">{net:+.3f}</span><span class="close-bal">{bal:.2f}</span><span class="close-bal-delta {delta_cls}">{delta_str}</span><span class="close-time"><span class="time-full">{time_str}</span><span class="time-short">{dur_str}</span></span></div>\n'
 
         if shorts_rows:
             closes_section = f"""
@@ -966,6 +975,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         padding-left: 12px;
         color: #6e7681;
         font-size: 12px;
+    }}
+    .time-short {{
+        display: none;
+    }}
+    @media (max-width: 768px) {{
+        .time-full {{
+            display: none;
+        }}
+        .time-short {{
+            display: inline;
+        }}
     }}
     .cycle-header {{
         display: flex;
@@ -1988,7 +2008,7 @@ function refreshShorts() {{
                 '<span class="close-delta ' + netCls + '">' + (potNet >= 0 ? "+" : "") + potNet.toFixed(3) + '</span>' +
                 '<span class="close-bal close-bal-open">' + balance.toFixed(2) + '</span>' +
                 '<span class="close-bal-delta muted">\u2014</span>' +
-                '<span class="close-time">' + (p.opened_short_str || p.opened_str) + '</span></div>';
+                (function() {{ var ts=p.opened_ts||0; if(!ts) return '<span class="close-time"><span class="time-full">\u2014</span><span class="time-short">\u2014</span></span></div>'; var sec=(Date.now()/1000)-ts; var d=sec>=86400?Math.floor(sec/86400)+"d":(sec>=3600?Math.floor(sec/3600)+"h":Math.floor(sec/60)+"m"); return '<span class="close-time"><span class="time-full">'+(p.opened_short_str||p.opened_str)+'</span><span class="time-short">'+d+'</span></span></div>'; }})();
         }}
 
         // Closed shorts
@@ -2033,7 +2053,7 @@ function refreshShorts() {{
                 '<span class="close-delta ' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(3) + '</span>' +
                 '<span class="close-bal">' + bal.toFixed(2) + '</span>' +
                 '<span class="close-bal-delta ' + bdCls + '">' + bdStr + '</span>' +
-                '<span class="close-time">' + timeStr + '</span></div>';
+                (function() {{ var ds=c.duration_sec||0; var d=ds>=86400?Math.floor(ds/86400)+"d":(ds>=3600?Math.floor(ds/3600)+"h":(ds>=60?Math.floor(ds/60)+"m":Math.floor(ds)+"s")); return '<span class="close-time"><span class="time-full">'+timeStr+'</span><span class="time-short">'+d+'</span></span></div>'; }})();
         }}
 
         container.innerHTML = html || '<div class="muted" style="padding:10px 0">No shorts yet</div>';
