@@ -460,6 +460,10 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
                 outcome = f"Failed to open short for {symbol}"
                 logger.error(outcome)
 
+    # ── Re-fetch positions after potential trade ──
+    exchange_positions = exchange.get_open_positions()
+    sync_positions_with_exchange(state, exchange_positions, exchange)
+
     # ── Fetch recent close shorts for report ──
     recent_closes = []
     try:
