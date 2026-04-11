@@ -18,13 +18,13 @@ Single score 0-100 ranking how strongly a pair is trending down:
 
 **4 components (normalized 0-100 across all pairs):**
 - **ADX directional** (30%): `(DI_minus - DI_plus) * ADX/100` — trend strength + direction
-- **Slope** (25%): linear regression slope as %/candle — price descent speed
-- **ROC weighted** (25%): `ROC(5)*0.4 + ROC(14)*0.35 + ROC(30)*0.25` — multi-period momentum
+- **Slope** (25%): linear regression slope as %/candle (period=150, 37.5h) — price descent speed
+- **ROC weighted** (25%): `ROC(5)*0.4 + ROC(14)*0.35 + ROC(150)*0.25` — multi-period momentum
 - **EMA gap** (20%): `(EMA21 - EMA9) / price * 100` — bearish spread
 
 **Quality multipliers:**
-- **R²**: coefficient of determination of linear regression (period=30). Penalizes flash crashes (single candle spikes). Zero for uptrends (slope >= 0).
-- **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles. Only applies when total drop > 5%. Penalizes step-drops (TAO pattern: flat→dump→flat).
+- **R²**: coefficient of determination of linear regression (period=150, 37.5h). Penalizes flash crashes (single candle spikes). Zero for uptrends (slope >= 0).
+- **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles (period=150). Only applies when total drop > 5%. Penalizes step-drops (TAO pattern: flat→dump→flat).
 
 **Formula:** `score = raw_score * effective_r2 * dc_penalty`
 
