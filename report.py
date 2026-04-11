@@ -102,6 +102,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <tr class="pos-row scan-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'"
                 data-symbol="{_esc(p['base'])}/{_esc(p['quote'])}" data-1m="{p_1m}" data-15m="{p_15m}" data-1h="{p_1h}">
                 <td class="symbol">{_esc(p['base'])}<span class="quote">/{_esc(p['quote'])}</span></td>
+                <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
                 <td>{p['leverage']:.0f}x</td>
@@ -111,9 +112,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td>{_fmt_price(p['break_even_price'])}</td>
                 <td class="liq-price">{_fmt_price(p['liq_price'])}</td>
                 <td class="{'negative' if p['deducted_fee'] > 0 else ('positive' if p['deducted_fee'] < 0 else 'muted')}">{f"{-p['deducted_fee']:+.4f}" if p['deducted_fee'] != 0 else "0.0000"}</td>
-                <td class="{'ft-pos' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}">{f"{p['funding_fee']:.4f}" if p['funding_fee'] > 0 else (f"{p['funding_fee']:+.4f}" if p['funding_fee'] < 0 else "0.0000")}</td>
+                <td class="{'ft-pos' if p['funding_fee'] > 0 else ('negative' if p['funding_fee'] < 0 else 'muted')}" style="text-align:right">{f"{p['funding_fee']:.4f}" if p['funding_fee'] > 0 else (f"{p['funding_fee']:+.4f}" if p['funding_fee'] < 0 else "0.0000")}</td>
                 <td>{f"{p.get('days_since_liq') - 1000}d+" if p.get('days_since_liq', -1) >= 1000 else (f"{p.get('days_since_liq')}d" if p.get('days_since_liq', -1) >= 0 else "—")}</td>
-                <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td>{p['opened_str']}</td>
             </tr>"""
 
@@ -1544,6 +1544,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <thead>
         <tr>
             <th>Symbol</th>
+            <th>PnL</th>
             <th>Entry</th>
             <th>Current</th>
             <th>Lev</th>
@@ -1555,7 +1556,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Fee</th>
             <th>Fund</th>
             <th>Last@Liq</th>
-            <th>PnL</th>
             <th>Opened</th>
         </tr>
     </thead>
@@ -1860,6 +1860,7 @@ function refreshPositions() {{
 
             html += '<tr class="pos-row">' +
                 '<td class="symbol">' + p.base + '<span class="quote">/' + p.quote + '</span></td>' +
+                '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + fmtP(p.entry_price) + '</td>' +
                 '<td>' + fmtP(p.current_price) + '</td>' +
                 '<td>' + p.leverage.toFixed(0) + 'x</td>' +
@@ -1869,9 +1870,8 @@ function refreshPositions() {{
                 '<td>' + fmtP(p.break_even_price) + '</td>' +
                 '<td class="liq-price">' + fmtP(p.liq_price) + '</td>' +
                 (function() {{ var df=p.deducted_fee||0; var cls=df>0?"negative":(df<0?"positive":"muted"); return '<td class="'+cls+'">'+(df!==0?(-df>0?"+":"")+(-df).toFixed(4):"0.0000")+'</td>'; }})() +
-                (function() {{ var ff=p.funding_fee||0; var cls=ff>0?"ft-pos":(ff<0?"negative":"muted"); return '<td class="'+cls+'">'+(ff>0?ff.toFixed(4):(ff<0?ff.toFixed(4):"0.0000"))+'</td>'; }})() +
+                (function() {{ var ff=p.funding_fee||0; var cls=ff>0?"ft-pos":(ff<0?"negative":"muted"); return '<td class="'+cls+'" style="text-align:right">'+(ff>0?ff.toFixed(4):(ff<0?ff.toFixed(4):"0.0000"))+'</td>'; }})() +
                 '<td>' + (function() {{ var d=p.days_since_liq; if(d===undefined||d===null||d<0) return "\u2014"; if(d>=1000) return (d-1000)+"d+"; return d+"d"; }})() + '</td>' +
-                '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 '<td>' + p.opened_str + '</td>' +
                 '</tr>';
         }}
