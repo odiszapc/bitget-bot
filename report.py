@@ -1490,6 +1490,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
     </div>
     <div class="card">
+        <div class="label">Wallet Balance</div>
+        <div class="value neutral">{wallet_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
+    </div>
+    <div class="card">
         <div class="label">Est. Balance at TP</div>
         <div class="value {'positive' if est_tp_net > 0 else ('negative' if est_tp_net < 0 else 'muted')}">{est_balance_at_tp:.2f} <small style="font-size:12px">({est_tp_net:+.2f})</small></div>
     </div>
