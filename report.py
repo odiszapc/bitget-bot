@@ -65,6 +65,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     open_symbols = {p["symbol"] for p in pos_data}
     total_unrealized = sum(p["unrealized_pnl"] for p in pos_data)
 
+    # Estimated balance if all positions hit TP
+    est_tp_net = 0.0
+    for p in pos_data:
+        tp = p.get("tp", 0)
+        if tp > 0 and p.get("entry_price", 0) > 0:
+            contracts = p.get("margin", 0) * p.get("leverage", 10) / p.get("entry_price", 1)
+            gross = (p["entry_price"] - tp) * contracts
+            close_fee = tp * contracts * 0.001
+            est_tp_net += gross - close_fee
+    est_balance_at_tp = current_balance + est_tp_net
+
     position_rows = ""
     position_modals = ""
     if pos_data:
@@ -1476,6 +1487,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="card">
         <div class="label">Unrealized PnL</div>
         <div class="value {unrealized_class}">{total_unrealized:+.2f} <small style="font-size:12px">USDT</small></div>
+    </div>
+    <div class="card">
+        <div class="label">Est. Balance at TP</div>
+        <div class="value {'positive' if est_tp_net > 0 else ('negative' if est_tp_net < 0 else 'muted')}">{est_balance_at_tp:.2f} <small style="font-size:12px">({est_tp_net:+.2f})</small></div>
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
