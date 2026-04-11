@@ -1786,10 +1786,16 @@ function doShort(symbol, btn) {{
     var symEl = document.getElementById("preview-symbol");
     var chartsEl = document.getElementById("preview-charts");
     if (!panel) return;
+    var currentRow = null;
 
-    document.addEventListener("mouseenter", function(e) {{
+    document.addEventListener("mouseover", function(e) {{
         var row = e.target.closest(".scan-row");
-        if (!row) return;
+        if (row === currentRow) return;
+        currentRow = row;
+        if (!row) {{
+            panel.classList.remove("visible");
+            return;
+        }}
         var symbol = row.getAttribute("data-symbol") || "";
         var tfs = [
             ["1 min", row.getAttribute("data-1m")],
@@ -1812,13 +1818,16 @@ function doShort(symbol, btn) {{
             chartsEl.innerHTML = '<div class="preview-empty">No charts</div>';
         }}
         panel.classList.add("visible");
-    }}, true);
+    }});
 
-    document.addEventListener("mouseleave", function(e) {{
+    document.addEventListener("mouseout", function(e) {{
         var row = e.target.closest(".scan-row");
-        if (!row) return;
-        panel.classList.remove("visible");
-    }}, true);
+        var related = e.relatedTarget ? e.relatedTarget.closest(".scan-row") : null;
+        if (row && row !== related) {{
+            currentRow = null;
+            panel.classList.remove("visible");
+        }}
+    }});
 }})();
 
 // Refresh positions table
