@@ -1780,7 +1780,7 @@ function doShort(symbol, btn) {{
     }});
 }}
 
-// Preview panel on hover (event delegation — works with dynamically added rows)
+// Preview panel on hover + touch (event delegation)
 (function() {{
     var panel = document.getElementById("preview-panel");
     var symEl = document.getElementById("preview-symbol");
@@ -1788,8 +1788,7 @@ function doShort(symbol, btn) {{
     if (!panel) return;
     var currentRow = null;
 
-    document.addEventListener("mouseover", function(e) {{
-        var row = e.target.closest(".scan-row");
+    function showPreview(row) {{
         if (row === currentRow) return;
         currentRow = row;
         if (!row) {{
@@ -1818,15 +1817,45 @@ function doShort(symbol, btn) {{
             chartsEl.innerHTML = '<div class="preview-empty">No charts</div>';
         }}
         panel.classList.add("visible");
-    }});
+    }}
 
+    function hidePreview() {{
+        currentRow = null;
+        panel.classList.remove("visible");
+    }}
+
+    // Mouse
+    document.addEventListener("mouseover", function(e) {{
+        showPreview(e.target.closest(".scan-row"));
+    }});
     document.addEventListener("mouseout", function(e) {{
         var row = e.target.closest(".scan-row");
         var related = e.relatedTarget ? e.relatedTarget.closest(".scan-row") : null;
-        if (row && row !== related) {{
-            currentRow = null;
-            panel.classList.remove("visible");
+        if (row && row !== related) hidePreview();
+    }});
+
+    // Touch — show on touchstart, follow finger on touchmove, hide on touchend
+    document.addEventListener("touchstart", function(e) {{
+        var row = e.target.closest(".scan-row");
+        if (row) {{
+            showPreview(row);
+            e.preventDefault();
         }}
+    }}, {{passive: false}});
+
+    document.addEventListener("touchmove", function(e) {{
+        var touch = e.touches[0];
+        var el = document.elementFromPoint(touch.clientX, touch.clientY);
+        var row = el ? el.closest(".scan-row") : null;
+        if (row) {{
+            showPreview(row);
+        }} else {{
+            hidePreview();
+        }}
+    }});
+
+    document.addEventListener("touchend", function() {{
+        hidePreview();
     }});
 }})();
 
