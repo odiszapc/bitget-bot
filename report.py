@@ -74,7 +74,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             gross = (p["entry_price"] - tp) * contracts
             close_fee = tp * contracts * 0.001
             est_tp_net += gross - close_fee
-    est_balance_at_tp = current_balance + est_tp_net
+    wallet_balance = current_balance - total_unrealized  # total includes unrealized
+    est_balance_at_tp = wallet_balance + est_tp_net
 
     position_rows = ""
     position_modals = ""
