@@ -92,8 +92,15 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             margin_pct = (p['margin'] / current_balance * 100) if current_balance > 0 else 0
 
             pos_modal_id = f"pos-modal-{pidx}"
+            chart_map_ci = cycle_info.get("chart_map", {}) if cycle_info else {}
+            pos_ch = chart_map_ci.get(p["symbol"], {})
+            cb = int(now_dt.timestamp())
+            p_1m = f'{pos_ch["1m"]}?t={cb}' if "1m" in pos_ch else ""
+            p_15m = f'{pos_ch["15m"]}?t={cb}' if "15m" in pos_ch else ""
+            p_1h = f'{pos_ch["1h"]}?t={cb}' if "1h" in pos_ch else ""
             position_rows += f"""
-            <tr class="pos-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'">
+            <tr class="pos-row scan-row" onclick="document.getElementById('{pos_modal_id}').style.display='flex'"
+                data-symbol="{_esc(p['base'])}/{_esc(p['quote'])}" data-1m="{p_1m}" data-15m="{p_15m}" data-1h="{p_1h}">
                 <td class="symbol">{_esc(p['base'])}<span class="quote">/{_esc(p['quote'])}</span></td>
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
