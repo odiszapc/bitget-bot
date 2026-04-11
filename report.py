@@ -781,6 +781,14 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         gap: 16px;
         margin-bottom: 28px;
     }}
+    @media (max-width: 768px) {{
+        .top-row {{
+            flex-direction: column;
+        }}
+        .cycle-panel, .closes-panel {{
+            min-width: unset;
+        }}
+    }}
     .cycle-panel {{
         background: #161b22;
         border: 1px solid #21262d;
