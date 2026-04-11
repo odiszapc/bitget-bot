@@ -83,7 +83,7 @@ def _adx_directional(df: pd.DataFrame, period: int = 14) -> tuple[float, float, 
     return (di_minus - di_plus) * (adx / 100), adx, di_plus, di_minus
 
 
-def _slope_and_r2(df: pd.DataFrame, period: int = 30) -> tuple[float, float]:
+def _slope_and_r2(df: pd.DataFrame, period: int = 150) -> tuple[float, float]:
     """Linear regression slope (%/candle) and R² (trend quality 0-1)."""
     closes = df["close"].iloc[-period:].values
     x = np.arange(len(closes))
@@ -99,13 +99,13 @@ def _slope_and_r2(df: pd.DataFrame, period: int = 30) -> tuple[float, float]:
 
 
 def _roc_weighted(df: pd.DataFrame) -> float:
-    """Weighted ROC: 5-period*0.4 + 14-period*0.35 + 30-period*0.25."""
+    """Weighted ROC: 5-period*0.4 + 14-period*0.35 + 150-period*0.25."""
     close = df["close"]
     def roc(n):
         if len(close) < n + 1:
             return 0.0
         return (close.iloc[-1] - close.iloc[-n - 1]) / close.iloc[-n - 1] * 100
-    return roc(5) * 0.4 + roc(14) * 0.35 + roc(30) * 0.25
+    return roc(5) * 0.4 + roc(14) * 0.35 + roc(150) * 0.25
 
 
 def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
@@ -116,7 +116,7 @@ def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
     return (ema_s - ema_f) / price * 100 if price != 0 else 0.0
 
 
-def _drop_concentration(df: pd.DataFrame, period: int = 30, top_n: int = 3) -> float:
+def _drop_concentration(df: pd.DataFrame, period: int = 150, top_n: int = 3) -> float:
     """
     What fraction of total price drop is concentrated in top-N biggest candles.
     Returns 0-1: 0 = evenly distributed or small drop, 1 = large drop in N candles.
