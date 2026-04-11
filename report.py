@@ -91,6 +91,16 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
             margin_pct = (p['margin'] / current_balance * 100) if current_balance > 0 else 0
 
+            # Estimated net profit at TP
+            _tp = p.get("tp", 0)
+            if _tp > 0 and p.get("entry_price", 0) > 0:
+                _contracts = p["margin"] * p.get("leverage", 10) / p["entry_price"]
+                _gross = (p["entry_price"] - _tp) * _contracts
+                _close_fee = _tp * _contracts * 0.001
+                _est_tp = _gross - _close_fee
+            else:
+                _est_tp = 0
+
             pos_modal_id = f"pos-modal-{pidx}"
             chart_map_ci = cycle_info.get("chart_map", {}) if cycle_info else {}
             pos_ch = chart_map_ci.get(p["symbol"], {})
@@ -103,6 +113,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 data-symbol="{_esc(p['base'])}/{_esc(p['quote'])}" data-1m="{p_1m}" data-15m="{p_15m}" data-1h="{p_1h}">
                 <td class="symbol">{_esc(p['base'])}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
+                <td class="{'positive' if _est_tp > 0 else ('negative' if _est_tp < 0 else 'muted')}">{f"+{_est_tp:.4f}" if _est_tp > 0 else (f"{_est_tp:+.4f}" if _est_tp != 0 else "—")}</td>
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
                 <td>{p['leverage']:.0f}x</td>
@@ -157,7 +168,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="14" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="15" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -1563,6 +1574,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <tr>
             <th>Symbol</th>
             <th>PnL</th>
+            <th>Est.TP</th>
             <th>Entry</th>
             <th>Current</th>
             <th>Lev</th>
@@ -1893,7 +1905,7 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="14" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" class="empty">No open positions</td></tr>';
             return;
         }}
 
@@ -1915,6 +1927,7 @@ function refreshPositions() {{
             html += '<tr class="pos-row">' +
                 '<td class="symbol">' + p.base + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
+                (function() {{ var tp=p.tp||0, ep=p.entry_price||0, lev=p.leverage||10, mg=p.margin||0; if(!tp||!ep) return '<td class="muted">\u2014</td>'; var c=mg*lev/ep, g=(ep-tp)*c, cf=tp*c*0.001, n=g-cf; return '<td class="'+(n>0?"positive":(n<0?"negative":"muted"))+'">+'+ n.toFixed(4)+'</td>'; }})() +
                 '<td>' + fmtP(p.entry_price) + '</td>' +
                 '<td>' + fmtP(p.current_price) + '</td>' +
                 '<td>' + p.leverage.toFixed(0) + 'x</td>' +
