@@ -380,12 +380,9 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
     max_risk = config.get("max_risk_score", 3)
     default_tp_roi = config.get("auto_tp_roi_pct", 3.0)
     top_n = config.get("auto_top_n", 10)
-    top_candidates = scan_results[:top_n]
-    candidates = [
-        s for s in top_candidates
-        if s.get("risk_score", 10) <= max_risk
-        and s["symbol"] not in open_position_symbols
-    ]
+    # Filter out already open positions first, then take top N
+    available = [s for s in scan_results if s["symbol"] not in open_position_symbols]
+    candidates = [s for s in available[:top_n] if s.get("risk_score", 10) <= max_risk]
     outcome = ""
 
     if not all_safe:
