@@ -218,13 +218,16 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
         candles_1h = exchange.get_ohlcv(symbol, '1h', limit=150)
         df_1h = candles_to_dataframe(candles_1h)
         if df_1h is not None:
-            from strategy import _slope_and_r2 as slope_r2
+            from strategy import _slope_and_r2 as slope_r2, _drop_concentration as dc_fn
             slope_1h, r2_1h = slope_r2(df_1h, min(150, len(df_1h)))
+            dc_1h = dc_fn(df_1h, min(150, len(df_1h)), threshold_pct=-3.0)
             analysis["slope_1h"] = slope_1h
             analysis["r2_1h"] = r2_1h
+            analysis["dc_1h"] = dc_1h
         else:
             analysis["slope_1h"] = 0
             analysis["r2_1h"] = 0
+            analysis["dc_1h"] = 0
 
         ticker_data = tickers.get(symbol, {})
         quote_volume = float(ticker_data.get("quoteVolume", 0) or 0)

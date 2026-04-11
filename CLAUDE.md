@@ -24,9 +24,10 @@ Single score 0-100 ranking how strongly a pair is trending down:
 
 **Quality multipliers:**
 - **R²**: coefficient of determination of linear regression (period=150, 37.5h). Penalizes flash crashes (single candle spikes). Zero for uptrends (slope >= 0).
-- **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles (period=150). Only applies when total drop > 5%. Penalizes step-drops (TAO pattern: flat→dump→flat).
+- **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles (period=150). Only applies when total drop > 5% on 15m. Penalizes step-drops (TAO pattern: flat→dump→flat).
+- **DC 1h**: same metric on hourly candles with 3% threshold. Catches flash crashes visible on 1h (COST pattern: sudden 3% drop in 2-3 candles).
 
-**Formula:** `score = raw_score * effective_r2 * dc_penalty`
+**Formula:** `score = raw_score * effective_r2 * dc_penalty * quality_1h * dc_1h_penalty`
 
 ### Entry Criteria (auto-trade)
 - Take top N pairs by score (`auto_top_n`, default 3)

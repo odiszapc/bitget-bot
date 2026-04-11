@@ -116,19 +116,19 @@ def _ema_gap(df: pd.DataFrame, fast: int = 9, slow: int = 21) -> float:
     return (ema_s - ema_f) / price * 100 if price != 0 else 0.0
 
 
-def _drop_concentration(df: pd.DataFrame, period: int = 150, top_n: int = 3) -> float:
+def _drop_concentration(df: pd.DataFrame, period: int = 150, top_n: int = 3, threshold_pct: float = -5.0) -> float:
     """
     What fraction of total price drop is concentrated in top-N biggest candles.
     Returns 0-1: 0 = evenly distributed or small drop, 1 = large drop in N candles.
-    Only meaningful for drops > 5% — small declines naturally concentrate.
+    threshold_pct: minimum drop % for DC to activate (default -5% for 15m, -3% for 1h).
     """
     closes = df["close"].iloc[-period:].values
     if len(closes) < 2:
         return 0.0
     total_move = closes[-1] - closes[0]
     total_pct = total_move / closes[0] * 100 if closes[0] != 0 else 0
-    if total_pct >= -5.0:
-        return 0.0  # Drop < 5% — too small for concentration to matter
+    if total_pct >= threshold_pct:
+        return 0.0  # Drop too small for concentration to matter
     changes = np.diff(closes)
     top_drops = np.sort(changes)[:top_n]
     top_sum = top_drops.sum()
@@ -188,7 +188,10 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         slope_1h = r.get("slope_1h", 0)
         r2_1h = r.get("r2_1h", 0)
         quality_1h = r2_1h if slope_1h < 0 else 0.0
-        quality = effective_r2 * max(0.1, dc_penalty) * max(0.1, quality_1h)
+        # 1h DC penalty: flash crash on hourly (threshold 3%)
+        dc_1h = r.get("dc_1h", 0.0)
+        dc_1h_penalty = 1.0 - max(0.0, dc_1h - 0.5) * 2.0
+        quality = effective_r2 * max(0.1, dc_penalty) * max(0.1, quality_1h) * max(0.1, dc_1h_penalty)
         r["downtrend_score"] = round(raw_score * quality, 1)
 
 
