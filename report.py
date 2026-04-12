@@ -1112,6 +1112,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .scan-row {{
         cursor: pointer;
+        -webkit-user-select: none;
+        user-select: none;
     }}
     .scan-row:hover {{
         background: #1c2128 !important;
