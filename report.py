@@ -1924,29 +1924,53 @@ function doShort(symbol, btn) {{
         if (row && row !== related) hidePreview();
     }});
 
-    // Touch — show on touchstart, follow finger on touchmove, hide on touchend
+    // Touch — long press (500ms) for preview, tap for modal
+    var touchTimer = null;
+    var touchActive = false;
+    var touchStartY = 0;
+
     document.addEventListener("touchstart", function(e) {{
         var row = e.target.closest(".scan-row");
-        if (row) {{
+        if (!row) return;
+        touchActive = false;
+        touchStartY = e.touches[0].clientY;
+        touchTimer = setTimeout(function() {{
+            touchActive = true;
             showPreview(row);
+            if (navigator.vibrate) navigator.vibrate(30);
+        }}, 500);
+    }}, {{passive: true}});
+
+    document.addEventListener("touchmove", function(e) {{
+        // Cancel long press if scrolling vertically
+        if (!touchActive && Math.abs(e.touches[0].clientY - touchStartY) > 10) {{
+            clearTimeout(touchTimer);
+            return;
+        }}
+        // If long press activated, follow finger between rows
+        if (touchActive) {{
             e.preventDefault();
+            var touch = e.touches[0];
+            var el = document.elementFromPoint(touch.clientX, touch.clientY);
+            var row = el ? el.closest(".scan-row") : null;
+            if (row) {{
+                showPreview(row);
+            }} else {{
+                hidePreview();
+            }}
         }}
     }}, {{passive: false}});
 
-    document.addEventListener("touchmove", function(e) {{
-        var touch = e.touches[0];
-        var el = document.elementFromPoint(touch.clientX, touch.clientY);
-        var row = el ? el.closest(".scan-row") : null;
-        if (row) {{
-            showPreview(row);
-        }} else {{
+    document.addEventListener("touchend", function(e) {{
+        clearTimeout(touchTimer);
+        if (touchActive) {{
+            // Long press was active — hide preview, don't trigger click
             hidePreview();
+            touchActive = false;
+            e.preventDefault();
         }}
-    }});
-
-    document.addEventListener("touchend", function() {{
-        hidePreview();
-    }});
+        // If not active — normal tap, click fires naturally (opens modal)
+    }}, {{passive: false}});
 }})();
 
 // Refresh positions table
