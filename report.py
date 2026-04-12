@@ -55,6 +55,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     # Position sizing for display
     position_size_pct = cfg.get("position_size_pct", 50)
     max_positions = cfg.get("max_positions", 5)
+    auto_tp_roi = cfg.get("auto_tp_roi_pct", 3.0)
+    taker_rate = 0.001
     auto_margin_pct = position_size_pct / max_positions  # per-position margin %
     auto_exposure_pct = auto_margin_pct * leverage       # leveraged exposure %
     manual_margin_pct = 98
@@ -380,12 +382,17 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             d_15m = f'{preview_charts["15m"]}?t={cache_bust}' if "15m" in preview_charts else ""
             d_1h = f'{preview_charts["1h"]}?t={cache_bust}' if "1h" in preview_charts else ""
             pos_dot = ' <span class="pos-dot"></span>' if sr["symbol"] in open_symbols else ""
-            tp_ticks = sr.get("tp_ticks", 999)
-            if tp_ticks < 3:
-                tick_size_v = sr.get("tick_size", 0)
-                tick_warn = f' <span class="tick-warn"><span class="tick-warn-icon">⚠</span><span class="tick-tooltip"><b>Low tick precision</b><br>TP distance: {tp_ticks:.1f} ticks at ROI 3%<br>Tick size: {tick_size_v}<br>TP may be adjusted to entry − 1 tick</span></span>'
-            else:
-                tick_warn = ""
+
+            # Est. profit calculation
+            _min_roi = sr.get("min_roi", 2.0)
+            _act_roi = max(auto_tp_roi, _min_roi)
+            _margin = current_balance * position_size_pct / 100 / max_positions
+            _notional = _margin * leverage
+            _tp_pct = _act_roi / leverage / 100
+            _gross = _notional * _tp_pct
+            _of = _notional * taker_rate
+            _cf = (_notional - _gross) * taker_rate
+            _est_prof = _gross - _of - _cf
 
             # Component detail classes
             slope_v = sr.get("slope", 0)
@@ -402,22 +409,23 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             scan_rows += f"""
             <tr class="{row_class} scan-row" onclick="openModal('{modal_id}')"
                 data-symbol="{_esc(base)}/{_esc(quote)}" data-1m="{d_1m}" data-15m="{d_15m}" data-1h="{d_1h}">
-                <td class="symbol">{_esc(base)}<span class="quote">/{_esc(quote)}</span>{pos_dot}{tick_warn}</td>
+                <td class="symbol">{_esc(base)}{pos_dot}</td>
                 <td data-v="{dt_score}" class="{score_cls}"><b>{dt_score:.0f}</b></td>
-                <td data-v="{r2_v}" class="{'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
-                <td data-v="{dc_v}" class="{'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
-                <td data-v="{adx_dir_v}" class="{adx_dir_cls}">{adx_dir_v:+.1f}</td>
-                <td data-v="{slope_v}" class="{slope_cls}">{slope_v:+.3f}</td>
-                <td data-v="{roc_v}" class="{roc_cls}">{roc_v:+.2f}</td>
-                <td data-v="{sr.get('ema_gap', 0)}">{sr.get('ema_gap', 0):+.3f}</td>
-                <td data-v="{sr['rsi']}" class="{rsi_class}">{sr['rsi']:.1f}</td>
-                <td data-v="{sr['atr_pct']}">{sr['atr_pct']:.1f}%</td>
-                <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
-                <td data-v="{sr.get('min_roi', 2)}" class="{'warning' if sr.get('min_roi', 2) > 3 else 'muted'}">{sr.get('min_roi', 2):.1f}%</td>
-                <td data-v="{sr.get('risk_score', 0)}" class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
-                <td data-v="{sr.get('approx_liq', 0)}">{sr.get('approx_liq', 0):.4g}</td>
-                <td data-v="{sr.get('days_since_liq', -1) - 1000 if sr.get('days_since_liq', -1) >= 1000 else sr.get('days_since_liq', -1)}">{f"{sr.get('days_since_liq') - 1000}d+" if sr.get('days_since_liq', -1) >= 1000 else (f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "—")}</td>
-                <td data-v="{comp_sum}" class="comp-bars">{comp_bars}</td>
+                <td data-v="{sr.get('risk_score', 0)}" class="scan-extra {'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
+                <td data-v="{_min_roi}" class="scan-extra {'warning' if _min_roi > 3 else 'muted'}">{_min_roi:.1f}%</td>
+                <td data-v="{sr.get('days_since_liq', -1) - 1000 if sr.get('days_since_liq', -1) >= 1000 else sr.get('days_since_liq', -1)}" class="scan-extra">{f"{sr.get('days_since_liq') - 1000}d+" if sr.get('days_since_liq', -1) >= 1000 else (f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "—")}</td>
+                <td data-v="{_est_prof}" class="{'positive' if _est_prof > 0 else ('negative' if _est_prof < 0 else 'muted')}">{f"+{_est_prof:.3f}" if _est_prof > 0 else (f"{_est_prof:+.3f}" if _est_prof != 0 else "0")}</td>
+                <td data-v="{adx_dir_v}" class="scan-extra {adx_dir_cls}">{adx_dir_v:+.1f}</td>
+                <td data-v="{slope_v}" class="scan-extra {slope_cls}">{slope_v:+.3f}</td>
+                <td data-v="{roc_v}" class="scan-extra {roc_cls}">{roc_v:+.2f}</td>
+                <td data-v="{sr.get('ema_gap', 0)}" class="scan-extra">{sr.get('ema_gap', 0):+.3f}</td>
+                <td data-v="{r2_v}" class="scan-extra {'positive' if r2_v >= 0.7 else ('warning' if r2_v >= 0.4 else 'muted')}">{r2_v:.2f}</td>
+                <td data-v="{dc_v}" class="scan-extra {'positive' if dc_v <= 0.4 else ('warning' if dc_v <= 0.7 else 'neg')}">{dc_v:.2f}</td>
+                <td data-v="{sr['rsi']}" class="scan-extra {rsi_class}">{sr['rsi']:.1f}</td>
+                <td data-v="{sr['atr_pct']}" class="scan-extra">{sr['atr_pct']:.1f}%</td>
+                <td data-v="{vol_24h}" class="scan-extra {vol_cls}">{vol_str}</td>
+                <td data-v="{sr.get('approx_liq', 0)}" class="scan-extra">{sr.get('approx_liq', 0):.4g}</td>
+                <td data-v="{comp_sum}" class="scan-extra comp-bars">{comp_bars}</td>
             </tr>"""
 
             # Build modal for this symbol
@@ -505,20 +513,21 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <tr>
             <th>Symbol</th>
             <th class="sortable strategy-active" data-col="1" data-dir="desc">Score</th>
-            <th class="sortable" data-col="2">R²</th>
-            <th class="sortable" data-col="3">DC</th>
-            <th class="sortable" data-col="4">ADX</th>
-            <th class="sortable" data-col="5">Slope</th>
-            <th class="sortable" data-col="6">ROC</th>
-            <th class="sortable" data-col="7">EMA</th>
-            <th class="sortable" data-col="8">RSI</th>
-            <th class="sortable" data-col="9">ATR</th>
-            <th class="sortable" data-col="10">Vol</th>
-            <th class="sortable" data-col="11" data-sort="asc">Min ROI</th>
-            <th class="sortable" data-col="12" data-sort="asc">Risk</th>
-            <th class="sortable" data-col="13">Liq</th>
-            <th class="sortable" data-col="14" data-sort="desc">Last@Liq</th>
-            <th class="sortable" data-col="15" style="min-width:120px">Components</th>
+            <th class="sortable scan-extra" data-col="2" data-sort="asc">Risk</th>
+            <th class="sortable scan-extra" data-col="3" data-sort="asc">Min ROI</th>
+            <th class="sortable scan-extra" data-col="4" data-sort="desc">Last@Liq</th>
+            <th class="sortable" data-col="5">Est.P</th>
+            <th class="sortable scan-extra" data-col="6">ADX</th>
+            <th class="sortable scan-extra" data-col="7">Slope</th>
+            <th class="sortable scan-extra" data-col="8">ROC</th>
+            <th class="sortable scan-extra" data-col="9">EMA</th>
+            <th class="sortable scan-extra" data-col="10">R²</th>
+            <th class="sortable scan-extra" data-col="11">DC</th>
+            <th class="sortable scan-extra" data-col="12">RSI</th>
+            <th class="sortable scan-extra" data-col="13">ATR</th>
+            <th class="sortable scan-extra" data-col="14">Vol</th>
+            <th class="sortable scan-extra" data-col="15">Liq</th>
+            <th class="sortable scan-extra" data-col="16" style="min-width:120px">Components</th>
         </tr>
     </thead>
     <tbody>
@@ -831,6 +840,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         }}
         .close-sym {{
             white-space: nowrap;
+        }}
+        .scan-extra {{
+            display: none !important;
         }}
     }}
     .cycle-panel {{
