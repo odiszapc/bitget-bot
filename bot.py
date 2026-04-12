@@ -373,7 +373,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
         elif days <= 14:
             sr["risk_score"] = 5       # 4-14 days
         elif days <= 30:
-            sr["risk_score"] = 4       # 15-30 days
+            sr["risk_score"] = 3       # 15-30 days
         elif days <= 60:
             sr["risk_score"] = 3       # 31-60 days
         else:
