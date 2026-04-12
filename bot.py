@@ -394,6 +394,9 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
         )
         sr["trade_eligible"] = eligible
 
+    # Re-sort: eligible first, then by score
+    scan_results.sort(key=lambda c: (c.get("trade_eligible", False), c.get("downtrend_score", 0)), reverse=True)
+
     # ── Step 8: Execute trade (only if safe) ──
     default_tp_roi = config.get("auto_tp_roi_pct", 3.0)
     top_n = config.get("auto_top_n", 10)
