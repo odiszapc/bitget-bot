@@ -30,10 +30,18 @@ Single score 0-100 ranking how strongly a pair is trending down:
 **Formula:** `score = raw_score * effective_r2 * dc_penalty * quality_1h * dc_1h_penalty`
 
 ### Entry Criteria (auto-trade)
-- Take top N pairs by score (`auto_top_n`, default 3)
+- Exclude already open positions, then take top N by score (`auto_top_n`, default 10)
 - First one with `risk_score <= max_risk_score` (default 3)
-- No existing position on that symbol
 - All safety checks passed (BTC trend, position count)
+- ROI auto-adjusted: `actual_roi = max(auto_tp_roi_pct, min_roi_for_pair)`
+
+### Min ROI (per pair)
+```
+min_roi = (2 * taker_rate + 2 * tick / price) * leverage * 100
+```
+Accounts for round-trip fees + 2 ticks close slippage.
+If `auto_tp_roi_pct < min_roi` → ROI auto-increased to min_roi.
+Prevents ALGO-type losses where few ticks TP + slippage = net loss.
 
 ### Risk Score (0-10)
 Based on **days since price was last above liquidation level** (from 90 daily candles):
@@ -150,21 +158,24 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Page auto-reloads when new Ready detected (updated_at changed)
 
 ### Dashboard Features
-- **Cards**: Balance → Active Trades → Unrealized PnL → Est. Balance at TP → Start Balance → Total Trades → Total PnL → TP/SL/Auto Bet Size
+- **Cards**: Balance → Active Trades → Unrealized PnL → Wallet Balance → Est. Balance at TP (with % of wallet) → Start Balance → Total Trades → Total PnL → TP/SL/Auto Bet Size
 - **Balance note**: Bitget `total` = wallet + unrealized PnL. `free = total - margin`. To get wallet: `total - unrealized`
 - **Est. Balance at TP**: `wallet + sum(gross_at_tp - close_fee)` per position. Open fee/funding already in wallet.
 - **Cycle status**: live progress bar + phase name (replaces countdown timer)
 - Auto-refresh Open Positions and Recent Shorts on page load
 - Manual refresh buttons with spinning icon
-- Market Scan table with sortable columns (per-column sort direction)
+- Market Scan: columns Symbol, Score, Risk, Min ROI, Last@Liq, Est.Profit, then ADX/Slope/ROC/EMA/R²/DC/RSI/ATR/Vol/Liq/Components
+- Market Scan mobile: only Symbol, Score, Est.Profit visible
+- Est.Profit per pair: simulated trade with auto params (margin, max(roi, min_roi))
+- Min ROI column: yellow if > 3% (tick-sensitive pairs)
 - Component bars visualization (ADX/Slope/ROC/EMA)
-- Risk score, approx liquidation price, Last@Liq columns
 - ⚠ tick precision warning icon with rich tooltip for cheap coins
 - Position modal with charts (1m/15m/1h)
 - Trade modal with bet size, TP ROI selectors, full P&L breakdown with formulas
 - Toast notifications on successful trade (shows fill price, TP, adjusted warning)
-- Progress bar for open positions (inline in PnL cell)
-- Fee, funding fee, break-even price, margin %, Last@Liq in Open Positions
+- Open Positions: PnL (after Symbol), Est.TP profit, ROI, progress bar, Fee, Fund, Last@Liq
+- Open Positions: chart preview on hover (same as scan table)
+- Trade modal: min ROI warning if selected ROI < breakeven, auto-adds min option to combobox
 - Recent Shorts with entry/exit prices, fees, net profit, duration, balance delta
 - Fee breakdown popup: closing profit, funding fee, opening fee, closing fee, position PnL
 - Color rules: positive=blue +, negative=red -, zero=grey
