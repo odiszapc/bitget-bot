@@ -177,6 +177,8 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Min ROI column: yellow if > 3% (tick-sensitive pairs)
 - Component bars visualization (ADX/Slope/ROC/EMA)
 - ⚠ tick precision warning icon with rich tooltip for cheap coins
+- Chart preview: hover on desktop, long press (500ms) on mobile with vibration
+- Touch: tap opens modal, long press shows preview, drag switches rows
 - Position modal with charts (1m/15m/1h)
 - Trade modal with bet size, TP ROI selectors, full P&L breakdown with formulas
 - Toast notifications on successful trade (shows fill price, TP, adjusted warning)
