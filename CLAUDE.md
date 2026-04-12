@@ -31,6 +31,11 @@ Single score 0-100 ranking how strongly a pair is trending down:
 
 **ADX penalty:** if ADX dir < 0 (bulls winning on 15m) → score killed. Prevents shorting pairs already reversing upward (WET case).
 
+**Trade eligibility (visual indicator):** green border in scan table if ALL:
+- `risk_score <= 3`, `slope < -0.01`, `R² >= 0.3`, no open position
+- Configurable: `min_slope_threshold` (-0.01), `min_r2_threshold` (0.3)
+- Visual only — trading criteria unchanged (for now)
+
 ### Entry Criteria (auto-trade)
 - Exclude already open positions, then take top N by score (`auto_top_n`, default 10)
 - First one with `risk_score <= max_risk_score` (default 3)
