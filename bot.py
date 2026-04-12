@@ -381,8 +381,20 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
 
     logger.info(f"Risk scores calculated for {len(days_since)} symbols")
 
-    # ── Step 8: Execute trade (only if safe) ──
+    # ── Step 7d: Mark trade-eligible pairs ──
     max_risk = config.get("max_risk_score", 3)
+    min_slope_threshold = config.get("min_slope_threshold", -0.01)
+    min_r2_threshold = config.get("min_r2_threshold", 0.3)
+    for sr in scan_results:
+        eligible = (
+            sr.get("risk_score", 10) <= max_risk
+            and sr.get("slope", 0) < min_slope_threshold
+            and sr.get("r2", 0) >= min_r2_threshold
+            and sr["symbol"] not in open_position_symbols
+        )
+        sr["trade_eligible"] = eligible
+
+    # ── Step 8: Execute trade (only if safe) ──
     default_tp_roi = config.get("auto_tp_roi_pct", 3.0)
     top_n = config.get("auto_top_n", 10)
     # Filter out already open positions first, then take top N

@@ -331,8 +331,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         modals = ""
         for idx, sr in enumerate(sr_list):
             dt_val = sr.get("downtrend_score", 0)
-            if dt_val >= 70:
-                row_class = "best-candidate" if idx == 0 else "scan-hot"
+            is_eligible = sr.get("trade_eligible", False)
+            if is_eligible:
+                row_class = "scan-eligible"
             elif dt_val >= 40:
                 row_class = ""
             else:
@@ -609,6 +610,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     }}
     .scan-hot {{
         background: #1a2a1a;
+    }}
+    .scan-eligible {{
+        background: #1a2a1a;
+        border-left: 3px solid #3fb950;
     }}
     .scan-dim td {{
         color: #6e7681;
