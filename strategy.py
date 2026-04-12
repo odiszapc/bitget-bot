@@ -188,10 +188,13 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         slope_1h = r.get("slope_1h", 0)
         r2_1h = r.get("r2_1h", 0)
         quality_1h = r2_1h if slope_1h < 0 else 0.0
+        # ADX dir penalty: negative = bulls winning on 15m → penalize
+        adx_dir = r.get("adx_dir", 0)
+        adx_penalty = 1.0 if adx_dir >= 0 else 0.0
         # 1h DC penalty: flash crash on hourly (threshold 3%)
         dc_1h = r.get("dc_1h", 0.0)
         dc_1h_penalty = 1.0 - max(0.0, dc_1h - 0.5) * 2.0
-        quality = effective_r2 * max(0.1, dc_penalty) * max(0.1, quality_1h) * max(0.1, dc_1h_penalty)
+        quality = effective_r2 * max(0.1, dc_penalty) * max(0.1, quality_1h) * max(0.1, dc_1h_penalty) * max(0.1, adx_penalty)
         r["downtrend_score"] = round(raw_score * quality, 1)
 
 
