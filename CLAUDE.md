@@ -27,7 +27,9 @@ Single score 0-100 ranking how strongly a pair is trending down:
 - **Drop Concentration (DC)**: fraction of total drop in top-3 biggest candles (period=150). Only applies when total drop > 5% on 15m. Penalizes step-drops (TAO pattern: flat→dump→flat).
 - **DC 1h**: same metric on hourly candles with 3% threshold. Catches flash crashes visible on 1h (COST pattern: sudden 3% drop in 2-3 candles).
 
-**Formula:** `score = raw_score * effective_r2 * dc_penalty * quality_1h * dc_1h_penalty`
+**Formula:** `score = raw_score * effective_r2 * dc_penalty * quality_1h * dc_1h_penalty * adx_penalty`
+
+**ADX penalty:** if ADX dir < 0 (bulls winning on 15m) → score killed. Prevents shorting pairs already reversing upward (WET case).
 
 ### Entry Criteria (auto-trade)
 - Exclude already open positions, then take top N by score (`auto_top_n`, default 10)
