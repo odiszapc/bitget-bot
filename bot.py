@@ -24,6 +24,7 @@ from strategy import (
     analyze_symbol,
     normalize_downtrend_scores,
     calculate_sl_tp,
+    calculate_min_roi,
 )
 from risk import RiskManager
 from state import (
@@ -255,6 +256,7 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
             "funding_rate": 0,
             "tick_size": tick_size,
             "tp_ticks": round(tp_ticks, 1),
+            "min_roi": calculate_min_roi(last_price, tick_size, leverage),
             "approx_liq": round(approx_liq, 8),
             "liq_dist_pct": round(liq_dist_pct, 1),
             "keep_margin_rate": kmr,
@@ -404,10 +406,16 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
         if margin <= 0:
             outcome = "Position size is zero, skipping"
         else:
+            # Use min_roi if default ROI is too low for this pair
+            pair_min_roi = best.get("min_roi", 2.0)
+            actual_roi = max(default_tp_roi, pair_min_roi)
+            if actual_roi > default_tp_roi:
+                logger.info(f"ROI adjusted: {default_tp_roi}% → {actual_roi}% (min_roi for {symbol.split(':')[0]})")
+
             if dry_run:
                 ticker = exchange.get_ticker(symbol)
                 entry_price = ticker["last"] if ticker else 0
-                tp_price_pct = default_tp_roi / leverage
+                tp_price_pct = actual_roi / leverage
                 tp_price = entry_price * (1 - tp_price_pct / 100)
                 logger.info(f"DRY RUN — order not placed")
                 position = {
@@ -427,8 +435,8 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
                     fill_price = position["entry_price"]
                     tick_size = exchange.get_tick_size(symbol)
 
-                    # Step 2: Calculate TP from fill price
-                    tp_price_pct = default_tp_roi / leverage
+                    # Step 2: Calculate TP from fill price with adjusted ROI
+                    tp_price_pct = actual_roi / leverage
                     tp_price = fill_price * (1 - tp_price_pct / 100)
                     tp_price = float(exchange.exchange.price_to_precision(symbol, tp_price))
                     if tp_price >= fill_price:

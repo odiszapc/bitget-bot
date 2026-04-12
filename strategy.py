@@ -195,6 +195,14 @@ def normalize_downtrend_scores(scan_results: list[dict]) -> None:
         r["downtrend_score"] = round(raw_score * quality, 1)
 
 
+def calculate_min_roi(price: float, tick_size: float, leverage: int = 10, taker_rate: float = 0.001, slippage_ticks: int = 2) -> float:
+    """Calculate minimum ROI % for a profitable trade, accounting for fees and slippage."""
+    if price <= 0 or tick_size <= 0:
+        return 99.0
+    min_price_change = 2 * taker_rate + slippage_ticks * tick_size / price
+    return round(min_price_change * leverage * 100, 2)
+
+
 def analyze_symbol(df: pd.DataFrame, config: dict) -> dict:
     """Analyze a single symbol: RSI, ATR, and composite downtrend components."""
     rsi = calculate_rsi(df)

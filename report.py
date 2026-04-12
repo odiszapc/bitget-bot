@@ -114,6 +114,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td class="symbol">{_esc(p['base'])}</td>
                 <td class="{p['pnl_class']}">{p['unrealized_pnl']:+.4f} <small>({p['pnl_pct']:+.2f}%)</small><br>{prog_bar_inline}</td>
                 <td class="{'positive' if _est_tp > 0 else ('negative' if _est_tp < 0 else 'muted')}">{f"+{_est_tp:.4f}" if _est_tp > 0 else (f"{_est_tp:+.4f}" if _est_tp != 0 else "—")}</td>
+                <td>{f"{(p['entry_price'] - _tp) / p['entry_price'] * p.get('leverage', 10) * 100:.1f}%" if _tp > 0 and p.get('entry_price', 0) > 0 else "—"}</td>
                 <td>{_fmt_price(p['entry_price'])}</td>
                 <td>{_fmt_price(p['current_price'])}</td>
                 <td>{p['leverage']:.0f}x</td>
@@ -168,7 +169,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
 </div>"""
     else:
-        position_rows = '<tr><td colspan="15" class="empty">No open positions</td></tr>'
+        position_rows = '<tr><td colspan="16" class="empty">No open positions</td></tr>'
 
     unrealized_class = "positive" if total_unrealized >= 0 else "negative"
     total_class = "positive" if total_pnl >= 0 else "negative"
@@ -412,6 +413,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <td data-v="{sr['rsi']}" class="{rsi_class}">{sr['rsi']:.1f}</td>
                 <td data-v="{sr['atr_pct']}">{sr['atr_pct']:.1f}%</td>
                 <td data-v="{vol_24h}" class="{vol_cls}">{vol_str}</td>
+                <td data-v="{sr.get('min_roi', 2)}" class="{'warning' if sr.get('min_roi', 2) > 3 else 'muted'}">{sr.get('min_roi', 2):.1f}%</td>
                 <td data-v="{sr.get('risk_score', 0)}" class="{'negative' if sr.get('risk_score', 0) >= 7 else ('warning' if sr.get('risk_score', 0) >= 4 else 'positive')}">{sr.get('risk_score', 0):.0f}</td>
                 <td data-v="{sr.get('approx_liq', 0)}">{sr.get('approx_liq', 0):.4g}</td>
                 <td data-v="{sr.get('days_since_liq', -1) - 1000 if sr.get('days_since_liq', -1) >= 1000 else sr.get('days_since_liq', -1)}">{f"{sr.get('days_since_liq') - 1000}d+" if sr.get('days_since_liq', -1) >= 1000 else (f"{sr.get('days_since_liq')}d ago" if sr.get('days_since_liq', -1) >= 0 else "—")}</td>
@@ -482,7 +484,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 </select>
             </div>
         </div>
-        <div class="trade-breakdown" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001" data-tick="{sr.get('tick_size', 0.01)}">
+        <div class="trade-breakdown" data-bal="{current_balance}" data-lev="{leverage}" data-rate="0.001" data-tick="{sr.get('tick_size', 0.01)}" data-minroi="{sr.get('min_roi', 2)}">
         </div>
         <div class="modal-actions">
             <div class="short-result"></div>
@@ -512,10 +514,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th class="sortable" data-col="8">RSI</th>
             <th class="sortable" data-col="9">ATR</th>
             <th class="sortable" data-col="10">Vol</th>
-            <th class="sortable" data-col="11" data-sort="asc">Risk</th>
-            <th class="sortable" data-col="12">Liq</th>
-            <th class="sortable" data-col="13" data-sort="desc">Last@Liq</th>
-            <th class="sortable" data-col="14" style="min-width:120px">Components</th>
+            <th class="sortable" data-col="11" data-sort="asc">Min ROI</th>
+            <th class="sortable" data-col="12" data-sort="asc">Risk</th>
+            <th class="sortable" data-col="13">Liq</th>
+            <th class="sortable" data-col="14" data-sort="desc">Last@Liq</th>
+            <th class="sortable" data-col="15" style="min-width:120px">Components</th>
         </tr>
     </thead>
     <tbody>
@@ -1595,6 +1598,7 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             <th>Symbol</th>
             <th>PnL</th>
             <th>Est.TP</th>
+            <th>ROI</th>
             <th>Entry</th>
             <th>Current</th>
             <th>Lev</th>
@@ -1766,6 +1770,27 @@ function updateExposure(sel, leverage) {{
         R("Total fees", totalFee.toFixed(4) + " USDT", openFee.toFixed(4) + " + " + closeFee.toFixed(4)) +
         '<div class="tb-row tb-result"><span class="tb-label">Net profit</span><span class="tb-val" style="color:' + netCls + '">' + (net >= 0 ? "+" : "") + net.toFixed(4) + " USDT (" + (netRoi >= 0 ? "+" : "") + netRoi.toFixed(1) + '% ROI)</span></div>' +
         R("Tick size", tick.toString(), "min TP = entry - tick");
+
+    // Min ROI warning
+    var minRoi = parseFloat(bd.getAttribute("data-minroi")) || 2;
+    var tpRoi = parseFloat(row.querySelector(".tp-roi-select").value);
+    if (tpRoi < minRoi) {{
+        bd.innerHTML += '<div class="ft-row" style="margin-top:6px;color:#f85149;font-weight:600">Min ROI for this pair: ' + minRoi.toFixed(1) + '% &mdash; selected ' + tpRoi + '% is below breakeven!</div>';
+    }}
+
+    // Add min_roi option to combobox if not present
+    var tpSelect = row.querySelector(".tp-roi-select");
+    var minVal = Math.ceil(minRoi);
+    var exists = false;
+    for (var oi = 0; oi < tpSelect.options.length; oi++) {{
+        if (parseInt(tpSelect.options[oi].value) === minVal) exists = true;
+    }}
+    if (!exists && minVal > 1 && minVal < 20) {{
+        var opt = document.createElement("option");
+        opt.value = minVal;
+        opt.textContent = minVal + "% (min)";
+        tpSelect.appendChild(opt);
+    }}
 }}
 
 // Manual SHORT button
@@ -1925,7 +1950,7 @@ function refreshPositions() {{
         countEl.textContent = positions.length;
 
         if (positions.length === 0) {{
-            tbody.innerHTML = '<tr><td colspan="15" class="empty">No open positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="16" class="empty">No open positions</td></tr>';
             return;
         }}
 
@@ -1948,6 +1973,7 @@ function refreshPositions() {{
                 '<td class="symbol">' + p.base + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 (function() {{ var tp=p.tp||0, ep=p.entry_price||0, lev=p.leverage||10, mg=p.margin||0; if(!tp||!ep) return '<td class="muted">\u2014</td>'; var c=mg*lev/ep, g=(ep-tp)*c, cf=tp*c*0.001, n=g-cf; return '<td class="'+(n>0?"positive":(n<0?"negative":"muted"))+'">+'+ n.toFixed(4)+'</td>'; }})() +
+                '<td>' + (function() {{ var tp=p.tp||0, ep=p.entry_price||0, lev=p.leverage||10; if(!tp||!ep) return '\u2014'; return ((ep-tp)/ep*lev*100).toFixed(1)+'%'; }})() + '</td>' +
                 '<td>' + fmtP(p.entry_price) + '</td>' +
                 '<td>' + fmtP(p.current_price) + '</td>' +
                 '<td>' + p.leverage.toFixed(0) + 'x</td>' +
