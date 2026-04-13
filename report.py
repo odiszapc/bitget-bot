@@ -515,6 +515,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                     <option value="1h">1h</option>
                 </select>
                 <input type="number" class="backtest-input backtest-balance" value="{current_balance:.2f}" step="0.01">
+                <select class="backtest-select backtest-bet">
+                    <option value="1">1%</option>
+                    <option value="2">2%</option>
+                    <option value="3">3%</option>
+                    <option value="4">4%</option>
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                    <option value="20" selected>20%</option>
+                    <option value="30">30%</option>
+                    <option value="50">50%</option>
+                    <option value="100">100%</option>
+                </select>
                 <input type="number" class="backtest-input backtest-roi" value="{max(auto_tp_roi, sr.get('min_roi', 2.0)):.1f}" step="0.1">
                 <span class="muted" style="font-size:11px">ROI%</span>
             </div>
@@ -2252,6 +2264,7 @@ function runBacktest(symbol, btn) {{
     var period = parseInt(section.querySelector(".backtest-period").value);
     var tf = section.querySelector(".backtest-tf").value;
     var balance = parseFloat(section.querySelector(".backtest-balance").value);
+    var betPct = parseInt(section.querySelector(".backtest-bet").value) / 100;
     var roi = parseFloat(section.querySelector(".backtest-roi").value);
     var resultsEl = section.querySelector(".backtest-results");
     var leverage = 10;
@@ -2299,7 +2312,7 @@ function runBacktest(symbol, btn) {{
             if (!position) {{
                 // Open short at close price
                 var entry = close;
-                var margin = bal * 0.2; // 20% bet
+                var margin = bal * betPct;
                 if (margin <= 0) break;
                 var notional = margin * leverage;
                 var contracts = notional / entry;
