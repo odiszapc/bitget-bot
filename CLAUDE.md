@@ -190,7 +190,7 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Charts: yellow entry marker (dot + dashed line) for open positions, only if within visible range
 - Trade modal: min ROI warning if selected ROI < breakeven, auto-adds min option to combobox
 - **Backtest emulation**: chain short trades on historical candles
-  - UI: Emulate button in modal with period (1d/1w/1m/2m/3m/6m/12m), timeframe (1m/15m/1h, auto 15m for >30d), balance, bet %, ROI
+  - UI: Emulate button in modal with period (1d/1w/1m/2m/3m/6m/1y/2y/3y/5y/10y), timeframe (1m/15m/1h, auto 15m for 2-6m, auto 1h for ≥1y), balance, bet %, ROI
   - JS engine: opens short at close, closes at TP (low ≤ tp), checks liquidation (cross margin: loss > balance)
   - Accounts for open/close fees + historical funding rates
   - Shows trade-by-trade results with entry/exit/net/balance/duration
