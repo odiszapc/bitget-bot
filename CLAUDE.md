@@ -183,7 +183,8 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Trade modal with bet size, TP ROI selectors, full P&L breakdown with formulas
 - Toast notifications on successful trade (shows fill price, TP, adjusted warning)
 - Open Positions: PnL (after Symbol), Est.TP profit, ROI, progress bar, Fee, Fund, Last@Liq
-- Open Positions: chart preview on hover (same as scan table)
+- Open Positions: chart preview on hover (same as scan table, chart URLs cached on page load for AJAX refresh)
+- Charts: yellow entry marker (dot + dashed line) for open positions, only if within visible range
 - Trade modal: min ROI warning if selected ROI < breakeven, auto-adds min option to combobox
 - Recent Shorts with entry/exit prices, fees, net profit, duration, balance delta
 - Fee breakdown popup: closing profit, funding fee, opening fee, closing fee, position PnL
