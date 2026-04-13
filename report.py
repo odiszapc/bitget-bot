@@ -2351,10 +2351,10 @@ function runBacktest(symbol, btn) {{
                 continue;
             }}
 
-            // Check liquidation (simplified: if unrealized loss > margin)
+            // Check liquidation: cross margin — unrealized loss vs total balance
             var unrealized = (close - position.entry) * position.contracts;
-            if (unrealized > position.margin * 0.9) {{
-                var loss = -position.margin;
+            if (unrealized > bal * 0.9) {{
+                var loss = -bal;
                 bal += loss;
                 trades.push({{
                     entry: position.entry, exit: close, gross: loss,
