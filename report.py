@@ -2012,7 +2012,9 @@ function refreshPositions() {{
             var progBar = '<div class="prog-track prog-inline" title="' + progTip + '"><div class="prog-fill ' + p.prog_cls + '" style="width:' + p.prog_val + '%"></div></div>';
             var marginPct = Math.round(p.margin / bal * 100);
 
-            html += '<tr class="pos-row">' +
+            var symKey = p.base + '/' + p.quote;
+            var cc = _chartCache[symKey] || {{}};
+            html += '<tr class="pos-row scan-row" data-symbol="' + symKey + '" data-1m="' + (cc["1m"]||"") + '" data-15m="' + (cc["15m"]||"") + '" data-1h="' + (cc["1h"]||"") + '">' +
                 '<td class="symbol">' + p.base + '</td>' +
                 '<td class="' + pnlCls + '">' + (p.unrealized_pnl >= 0 ? "+" : "") + p.unrealized_pnl.toFixed(4) + ' <small>(' + (p.pnl_pct >= 0 ? "+" : "") + p.pnl_pct.toFixed(2) + '%)</small><br>' + progBar + '</td>' +
                 (function() {{ var tp=p.tp||0, ep=p.entry_price||0, lev=p.leverage||10, mg=p.margin||0; if(!tp||!ep) return '<td class="muted">\u2014</td>'; var c=mg*lev/ep, g=(ep-tp)*c, cf=tp*c*0.001, n=g-cf; return '<td class="'+(n>0?"positive":(n<0?"negative":"muted"))+'">+'+ n.toFixed(4)+'</td>'; }})() +
@@ -2173,6 +2175,19 @@ function buildFeeTip(of, cf, ff, cp) {{
         '<div class="ft-row"><span class="ft-label">Closing fee</span>' + fv(-cf) + '</div>' +
         '<div class="ft-row ft-sep"><span class="ft-label">Position PnL</span>' + fv(pp) + '</div>';
 }}
+
+// Cache chart URLs from initial render for position rows
+var _chartCache = {{}};
+document.querySelectorAll("#positions-body .scan-row").forEach(function(row) {{
+    var sym = row.getAttribute("data-symbol");
+    if (sym) {{
+        _chartCache[sym] = {{
+            "1m": row.getAttribute("data-1m") || "",
+            "15m": row.getAttribute("data-15m") || "",
+            "1h": row.getAttribute("data-1h") || ""
+        }};
+    }}
+}});
 
 // Auto-refresh on page load
 refreshPositions();
