@@ -504,14 +504,18 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="backtest-section">
             <div class="backtest-header">
                 <button class="backtest-btn" onclick="runBacktest('{_esc(sr['symbol'])}', this)">Emulate</button>
-                <select class="backtest-select backtest-period" onchange="(function(s){{ var tf=s.closest('.backtest-header').querySelector('.backtest-tf'); if(parseInt(s.value)>30) tf.value='15m'; }})(this)">
+                <select class="backtest-select backtest-period" onchange="(function(s){{ var tf=s.closest('.backtest-header').querySelector('.backtest-tf'); var d=parseInt(s.value); if(d>=365) tf.value='1h'; else if(d>30) tf.value='15m'; }})(this)">
                     <option value="1">1d</option>
                     <option value="7" selected>1w</option>
                     <option value="30">1m</option>
                     <option value="60">2m</option>
                     <option value="90">3m</option>
                     <option value="180">6m</option>
-                    <option value="365">12m</option>
+                    <option value="365">1y</option>
+                    <option value="730">2y</option>
+                    <option value="1095">3y</option>
+                    <option value="1825">5y</option>
+                    <option value="3650">10y</option>
                 </select>
                 <select class="backtest-select backtest-tf">
                     <option value="1m">1m</option>
