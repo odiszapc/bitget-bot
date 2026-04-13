@@ -9,6 +9,7 @@ import logging
 from flask import Flask, request, jsonify
 from exchange import Exchange
 
+from flask import send_file
 from state import load_state, add_position, sync_positions_with_exchange
 from positions import build_position_data
 
@@ -302,6 +303,34 @@ def api_funding_history():
             return jsonify({"ok": True, "rates": [], "warning": str(e)})
     except Exception as e:
         logger.exception(f"Error in /api/funding-history: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backtest-chart", methods=["POST"])
+def api_backtest_chart():
+    """Generate backtest chart PNG from candle + trade data."""
+    try:
+        import io
+        from charts import generate_backtest_chart
+
+        data = request.get_json(force=True)
+        candles = data.get("candles", [])
+        trades = data.get("trades", [])
+        liq_idx = data.get("liqIdx")
+
+        if not candles or len(candles) < 2:
+            return jsonify({"ok": False, "error": "No candle data"}), 400
+
+        closes = [c[4] for c in candles]
+        png_bytes = generate_backtest_chart(closes, trades, liq_idx)
+
+        return send_file(
+            io.BytesIO(png_bytes),
+            mimetype='image/png',
+            download_name='backtest.png'
+        )
+    except Exception as e:
+        logger.exception(f"Error in /api/backtest-chart: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

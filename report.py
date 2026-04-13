@@ -1492,6 +1492,13 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         font-size: 11px;
         text-transform: uppercase;
     }}
+    .bt-chart {{
+        margin-top: 12px;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }}
     .bt-summary {{
         margin-top: 8px;
         padding: 10px;
@@ -2325,7 +2332,7 @@ function runBacktest(symbol, btn) {{
                     entry: position.entry, exit: position.tp, gross: gross,
                     openFee: position.openFee, closeFee: closeFee,
                     funding: position.funding, net: net, balance: bal,
-                    openTs: position.openTs, closeTs: ts, result: "TP"
+                    openTs: position.openTs, closeTs: ts, _closeIdx: i, result: "TP"
                 }});
                 position = null;
                 continue;
@@ -2340,7 +2347,7 @@ function runBacktest(symbol, btn) {{
                     entry: position.entry, exit: close, gross: loss,
                     openFee: position.openFee, closeFee: 0,
                     funding: position.funding, net: loss, balance: bal,
-                    openTs: position.openTs, closeTs: ts, result: "LIQ"
+                    openTs: position.openTs, closeTs: ts, _closeIdx: i, result: "LIQ"
                 }});
                 position = null;
                 break;
@@ -2367,10 +2374,43 @@ function runBacktest(symbol, btn) {{
         html += '<b>Net P&L:</b> <span class="' + (totalNet >= 0 ? "positive" : "negative") + '">' + (totalNet >= 0 ? "+" : "") + totalNet.toFixed(4) + ' USDT</span><br>';
         html += '<b>Balance:</b> ' + balance.toFixed(2) + ' &rarr; ' + bal.toFixed(2) + ' (' + ((bal - balance) / balance * 100).toFixed(1) + '%)<br>';
         html += '<b>Candles:</b> ' + candles.length + ' (' + tf + ')<br>';
-        if (liq) html += '<span class="negative"><b>LIQUIDATED</b></span>';
+        if (liq) {{
+            var liqTrade = trades[trades.length - 1];
+            var liqMs = liqTrade.closeTs - candles[0][0];
+            var liqH = Math.floor(liqMs / 3600000);
+            var liqStr = liqH < 24 ? liqH + "h" : Math.floor(liqH / 24) + "d " + (liqH % 24) + "h";
+            html += '<span class="negative"><b>LIQUIDATED</b> after ' + liqStr + ' from start</span>';
+        }}
         html += '</div>';
 
+        // Chart placeholder
+        html += '<div class="bt-chart"><span class="spinner"></span></div>';
         resultsEl.innerHTML = html;
+
+        // Generate chart
+        var chartTrades = trades.map(function(t) {{
+            return {{closeIdx: t._closeIdx, closePrice: t.exit, net: t.net, result: t.result}};
+        }});
+        var liqIdx = liq ? trades[trades.length-1]._closeIdx : null;
+
+        fetch(apiBase + "/api/backtest-chart", {{
+            method: "POST",
+            headers: {{"Content-Type": "application/json"}},
+            body: JSON.stringify({{candles: candles, trades: chartTrades, liqIdx: liqIdx}})
+        }})
+        .then(function(r) {{ return r.blob(); }})
+        .then(function(blob) {{
+            var chartEl = resultsEl.querySelector(".bt-chart");
+            if (chartEl) {{
+                var url = URL.createObjectURL(blob);
+                chartEl.innerHTML = '<img src="' + url + '" style="width:100%;border-radius:6px;border:1px solid #21262d">';
+            }}
+        }})
+        .catch(function() {{
+            var chartEl = resultsEl.querySelector(".bt-chart");
+            if (chartEl) chartEl.innerHTML = '<div class="muted">Chart unavailable</div>';
+        }});
+
         btn.disabled = false;
         btn.textContent = "Emulate";
     }}).catch(function(e) {{

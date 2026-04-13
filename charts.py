@@ -130,6 +130,79 @@ OVERLAP_CANDLES = {
 }
 
 
+WIN_COLOR = "#3fb950"
+LOSS_COLOR = "#f85149"
+
+
+def generate_backtest_chart(closes: list[float], trades: list[dict], liq_idx: int = None) -> bytes:
+    """
+    Generate backtest chart as PNG bytes.
+    trades: [{closeIdx, closePrice, net, result}, ...]
+    liq_idx: candle index of liquidation (or None)
+    Returns PNG bytes.
+    """
+    import io
+
+    fig, ax = plt.subplots(figsize=(6, 2.5), dpi=100)
+    fig.patch.set_facecolor(BG_COLOR)
+    ax.set_facecolor(BG_COLOR)
+
+    x = np.arange(len(closes))
+    y = np.array(closes, dtype=float)
+
+    ax.plot(x, y, color=LINE_COLOR, linewidth=1.2, zorder=3)
+
+    # Gradient fill
+    n_layers = 20
+    for i in range(n_layers):
+        frac = i / n_layers
+        alpha = 0.35 * (1 - frac)
+        level = y.min() + (y - y.min()) * (1 - frac)
+        ax.fill_between(x, level, y.min(), color=LINE_COLOR, alpha=alpha / n_layers, zorder=2)
+
+    # Glow on last point
+    ax.scatter([x[-1]], [y[-1]], color=GLOW_COLOR, s=30, zorder=5, edgecolors='none')
+    ax.scatter([x[-1]], [y[-1]], color=GLOW_COLOR, s=120, alpha=0.15, zorder=4, edgecolors='none')
+
+    # Grid
+    for gx in np.linspace(0, len(closes) - 1, 5)[1:-1]:
+        ax.axvline(x=gx, color=GRID_COLOR, linewidth=0.5, zorder=1)
+
+    # Lock geometry
+    ax.set_xlim(0, len(closes) - 1)
+    ax.margins(y=0.05)
+    y_min, y_max = ax.get_ylim()
+
+    # Trade markers
+    for t in trades:
+        ci = t.get("closeIdx", 0)
+        cp = t.get("closePrice", 0)
+        if ci < 0 or ci >= len(closes):
+            continue
+        if not (y_min <= cp <= y_max):
+            continue
+        color = WIN_COLOR if t.get("net", 0) >= 0 else LOSS_COLOR
+        ax.scatter([ci], [cp], color=color, s=80, zorder=8, edgecolors='none')
+        ax.scatter([ci], [cp], color=color, s=250, alpha=0.2, zorder=7, edgecolors='none')
+
+    # Liquidation marker
+    if liq_idx is not None and 0 <= liq_idx < len(closes):
+        lp = closes[liq_idx]
+        if y_min <= lp <= y_max:
+            ax.scatter([liq_idx], [lp], color=LOSS_COLOR, s=150, zorder=9, edgecolors='none', marker='X')
+            ax.axvline(x=liq_idx, color=LOSS_COLOR, linewidth=1, linestyle='--', alpha=0.5, zorder=6)
+
+    ax.set_ylim(y_min, y_max)
+    ax.axis("off")
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', facecolor=BG_COLOR, bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
 def _get_chart_symbols(scan_results: list[dict], open_position_symbols: set = None) -> list[str]:
     """Get symbols for charts/risk: top 20 per each metric + open positions."""
     chart_symbols = set()
