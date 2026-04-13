@@ -501,6 +501,25 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         <div class="modal-charts">
             {chart_imgs if chart_imgs else '<div class="empty">No charts available</div>'}
         </div>
+        <div class="backtest-section">
+            <div class="backtest-header">
+                <button class="backtest-btn" onclick="runBacktest('{_esc(sr['symbol'])}', this)">Emulate</button>
+                <select class="backtest-select backtest-period">
+                    <option value="1">1d</option>
+                    <option value="7" selected>1w</option>
+                    <option value="30">1m</option>
+                </select>
+                <select class="backtest-select backtest-tf">
+                    <option value="1m">1m</option>
+                    <option value="15m" selected>15m</option>
+                    <option value="1h">1h</option>
+                </select>
+                <input type="number" class="backtest-input backtest-balance" value="{current_balance:.2f}" step="0.01">
+                <input type="number" class="backtest-input backtest-roi" value="{max(auto_tp_roi, sr.get('min_roi', 2.0)):.1f}" step="0.1">
+                <span class="muted" style="font-size:11px">ROI%</span>
+            </div>
+            <div class="backtest-results" style="display:none"></div>
+        </div>
     </div>
 </div>"""
 
@@ -1420,6 +1439,67 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
         flex-direction: column;
         gap: 12px;
     }}
+    .backtest-section {{
+        margin-top: 16px;
+        border-top: 1px solid #21262d;
+        padding-top: 12px;
+    }}
+    .backtest-header {{
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }}
+    .backtest-btn {{
+        background: #1f6feb;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 16px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+    }}
+    .backtest-btn:hover {{ background: #388bfd; }}
+    .backtest-btn:disabled {{ opacity: 0.5; cursor: default; }}
+    .backtest-select, .backtest-input {{
+        background: #0d1117;
+        color: #c9d1d9;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-family: inherit;
+        font-size: 13px;
+    }}
+    .backtest-input {{ width: 70px; }}
+    .backtest-results {{
+        margin-top: 12px;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+    }}
+    .bt-row {{
+        display: flex;
+        gap: 8px;
+        padding: 3px 0;
+        border-bottom: 1px solid #21262d;
+        font-family: inherit;
+    }}
+    .bt-row.bt-header {{
+        color: #6e7681;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+    }}
+    .bt-summary {{
+        margin-top: 8px;
+        padding: 10px;
+        background: #13171e;
+        border-radius: 6px;
+        font-size: 13px;
+        line-height: 1.8;
+    }}
     .modal-chart img {{
         width: 100%;
         border-radius: 6px;
@@ -2158,6 +2238,147 @@ function refreshShorts() {{
         }});
     }});
 }})();
+
+// Backtest engine
+function runBacktest(symbol, btn) {{
+    var section = btn.closest(".backtest-section");
+    var period = parseInt(section.querySelector(".backtest-period").value);
+    var tf = section.querySelector(".backtest-tf").value;
+    var balance = parseFloat(section.querySelector(".backtest-balance").value);
+    var roi = parseFloat(section.querySelector(".backtest-roi").value);
+    var resultsEl = section.querySelector(".backtest-results");
+    var leverage = 10;
+    var takerRate = 0.001;
+
+    btn.disabled = true;
+    btn.textContent = "Loading...";
+    resultsEl.style.display = "block";
+    resultsEl.innerHTML = '<div class="muted">Fetching candles...</div>';
+
+    var apiBase = window.location.protocol + "//" + window.location.hostname + ":8432";
+
+    // Fetch candles and funding rates in parallel
+    Promise.all([
+        fetch(apiBase + "/api/candles?symbol=" + encodeURIComponent(symbol) + "&tf=" + tf + "&days=" + period).then(function(r) {{ return r.json(); }}),
+        fetch(apiBase + "/api/funding-history?symbol=" + encodeURIComponent(symbol) + "&days=" + period).then(function(r) {{ return r.json(); }})
+    ]).then(function(results) {{
+        var candleData = results[0];
+        var fundingData = results[1];
+
+        if (!candleData.ok || !candleData.candles || candleData.candles.length < 2) {{
+            resultsEl.innerHTML = '<div class="negative">No candle data</div>';
+            btn.disabled = false;
+            btn.textContent = "Emulate";
+            return;
+        }}
+
+        var candles = candleData.candles;
+        var fundingRates = (fundingData.ok && fundingData.rates) ? fundingData.rates : [];
+
+        // Build funding rate lookup: timestamp → rate
+        var fundingMap = {{}};
+        fundingRates.forEach(function(fr) {{ fundingMap[fr.timestamp] = fr.rate; }});
+
+        // Backtest logic
+        var trades = [];
+        var bal = balance;
+        var position = null;
+        var tpPricePct = roi / leverage / 100;
+
+        for (var i = 0; i < candles.length; i++) {{
+            var c = candles[i]; // [ts, open, high, low, close, vol]
+            var ts = c[0], open = c[1], high = c[2], low = c[3], close = c[4];
+
+            if (!position) {{
+                // Open short at close price
+                var entry = close;
+                var margin = bal * 0.2; // 20% bet
+                if (margin <= 0) break;
+                var notional = margin * leverage;
+                var contracts = notional / entry;
+                var openFee = notional * takerRate;
+                var tpPrice = entry * (1 - tpPricePct);
+                position = {{
+                    entry: entry, tp: tpPrice, contracts: contracts,
+                    margin: margin, notional: notional, openFee: openFee,
+                    openTs: ts, funding: 0
+                }};
+                continue;
+            }}
+
+            // Check funding (every 8h: 00:00, 08:00, 16:00 UTC)
+            var fundTs = Object.keys(fundingMap).map(Number);
+            fundTs.forEach(function(ft) {{
+                if (ft > position.openTs && ft <= ts && !position["_f" + ft]) {{
+                    position.funding += position.notional * fundingMap[ft];
+                    position["_f" + ft] = true;
+                }}
+            }});
+
+            // Check TP hit (low <= tp for SHORT)
+            if (low <= position.tp) {{
+                var closeFee = position.tp * position.contracts * takerRate;
+                var gross = (position.entry - position.tp) * position.contracts;
+                var net = gross - position.openFee - closeFee + position.funding;
+                bal += net;
+                trades.push({{
+                    entry: position.entry, exit: position.tp, gross: gross,
+                    openFee: position.openFee, closeFee: closeFee,
+                    funding: position.funding, net: net, balance: bal,
+                    openTs: position.openTs, closeTs: ts, result: "TP"
+                }});
+                position = null;
+                continue;
+            }}
+
+            // Check liquidation (simplified: if unrealized loss > margin)
+            var unrealized = (close - position.entry) * position.contracts;
+            if (unrealized > position.margin * 0.9) {{
+                var loss = -position.margin;
+                bal += loss;
+                trades.push({{
+                    entry: position.entry, exit: close, gross: loss,
+                    openFee: position.openFee, closeFee: 0,
+                    funding: position.funding, net: loss, balance: bal,
+                    openTs: position.openTs, closeTs: ts, result: "LIQ"
+                }});
+                position = null;
+                break;
+            }}
+        }}
+
+        // Render results
+        var html = '<div class="bt-row bt-header"><span style="width:40px">#</span><span style="width:70px">Entry</span><span style="width:70px">Exit</span><span style="width:60px">Net</span><span style="width:60px">Balance</span><span style="width:50px">Dur</span><span style="width:30px"></span></div>';
+        trades.forEach(function(t, idx) {{
+            var dur = Math.round((t.closeTs - t.openTs) / 60000);
+            var durStr = dur < 60 ? dur + "m" : (dur < 1440 ? Math.floor(dur/60) + "h" : Math.floor(dur/1440) + "d");
+            var cls = t.net >= 0 ? "positive" : "negative";
+            var resCls = t.result === "LIQ" ? "negative" : cls;
+            html += '<div class="bt-row"><span style="width:40px">' + (idx+1) + '</span><span style="width:70px">' + t.entry.toPrecision(5) + '</span><span style="width:70px">' + t.exit.toPrecision(5) + '</span><span style="width:60px" class="' + cls + '">' + (t.net >= 0 ? "+" : "") + t.net.toFixed(3) + '</span><span style="width:60px">' + t.balance.toFixed(2) + '</span><span style="width:50px">' + durStr + '</span><span style="width:30px" class="' + resCls + '">' + t.result + '</span></div>';
+        }});
+
+        // Summary
+        var totalNet = trades.reduce(function(s, t) {{ return s + t.net; }}, 0);
+        var wins = trades.filter(function(t) {{ return t.net > 0; }}).length;
+        var losses = trades.length - wins;
+        var liq = trades.some(function(t) {{ return t.result === "LIQ"; }});
+        html += '<div class="bt-summary">';
+        html += '<b>Trades:</b> ' + trades.length + ' (W:' + wins + ' L:' + losses + ')<br>';
+        html += '<b>Net P&L:</b> <span class="' + (totalNet >= 0 ? "positive" : "negative") + '">' + (totalNet >= 0 ? "+" : "") + totalNet.toFixed(4) + ' USDT</span><br>';
+        html += '<b>Balance:</b> ' + balance.toFixed(2) + ' &rarr; ' + bal.toFixed(2) + ' (' + ((bal - balance) / balance * 100).toFixed(1) + '%)<br>';
+        html += '<b>Candles:</b> ' + candles.length + ' (' + tf + ')<br>';
+        if (liq) html += '<span class="negative"><b>LIQUIDATED</b></span>';
+        html += '</div>';
+
+        resultsEl.innerHTML = html;
+        btn.disabled = false;
+        btn.textContent = "Emulate";
+    }}).catch(function(e) {{
+        resultsEl.innerHTML = '<div class="negative">Error: ' + e.message + '</div>';
+        btn.disabled = false;
+        btn.textContent = "Emulate";
+    }});
+}}
 
 // Fee breakdown tooltip builder
 function buildFeeTip(of, cf, ff, cp) {{

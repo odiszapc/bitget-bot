@@ -229,6 +229,82 @@ def api_positions():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/candles", methods=["GET"])
+def api_candles():
+    """Fetch historical candles with pagination for backtest."""
+    try:
+        symbol = request.args.get("symbol", "").strip()
+        tf = request.args.get("tf", "15m")
+        days = int(request.args.get("days", 7))
+        if not symbol:
+            return jsonify({"ok": False, "error": "Missing symbol"}), 400
+
+        exchange = _get_exchange()
+        import time as _time
+        now_ms = int(_time.time() * 1000)
+        period_ms = days * 86400 * 1000
+        since_ms = now_ms - period_ms
+
+        # Paginate: fetch chunks of 1000
+        all_candles = []
+        cursor = since_ms
+        while cursor < now_ms:
+            chunk = exchange.exchange.fetch_ohlcv(symbol, tf, since=cursor, limit=1000)
+            if not chunk:
+                break
+            all_candles.extend(chunk)
+            last_ts = chunk[-1][0]
+            if last_ts <= cursor:
+                break
+            cursor = last_ts + 1
+
+        # Format: [[ts, open, high, low, close, volume], ...]
+        return jsonify({"ok": True, "candles": all_candles, "count": len(all_candles)})
+    except Exception as e:
+        logger.exception(f"Error in /api/candles: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/funding-history", methods=["GET"])
+def api_funding_history():
+    """Fetch historical funding rates for a symbol."""
+    try:
+        symbol = request.args.get("symbol", "").strip()
+        days = int(request.args.get("days", 7))
+        if not symbol:
+            return jsonify({"ok": False, "error": "Missing symbol"}), 400
+
+        exchange = _get_exchange()
+        raw_symbol = symbol.replace("/USDT:USDT", "USDT")
+        import time as _time
+        now_ms = int(_time.time() * 1000)
+        since_ms = now_ms - days * 86400 * 1000
+
+        try:
+            response = exchange.exchange.publicMixGetV2MixMarketHistoryFundRate({
+                'productType': 'USDT-FUTURES',
+                'symbol': raw_symbol,
+                'pageSize': '100',
+            })
+            rates = response.get('data', [])
+            # Filter by time and format
+            result = []
+            for r in rates:
+                ts = int(r.get('fundingTime', 0) or 0)
+                if ts >= since_ms:
+                    result.append({
+                        "timestamp": ts,
+                        "rate": float(r.get('fundingRate', 0) or 0),
+                    })
+            result.sort(key=lambda x: x["timestamp"])
+            return jsonify({"ok": True, "rates": result})
+        except Exception as e:
+            return jsonify({"ok": True, "rates": [], "warning": str(e)})
+    except Exception as e:
+        logger.exception(f"Error in /api/funding-history: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
