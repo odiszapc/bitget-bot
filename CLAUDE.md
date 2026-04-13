@@ -156,6 +156,9 @@ bitget-short-bot/
 - `POST /api/short` — Open manual short (params: symbol, bet_pct, tp_roi_pct)
 - `GET /api/positions` — Live position data with days_since_liq
 - `GET /api/shorts` — Open positions + recent closed shorts with fee breakdown
+- `GET /api/candles` — Historical candles with pagination (params: symbol, tf, days)
+- `GET /api/funding-history` — Historical funding rates (params: symbol, days)
+- `POST /api/backtest-chart` — Generate backtest chart PNG from candles + trades data
 
 ### Cycle Status (output/cycle_status.json)
 Bot writes progress to `cycle_status.json` during each cycle:
@@ -186,6 +189,13 @@ Bot writes progress to `cycle_status.json` during each cycle:
 - Open Positions: chart preview on hover (same as scan table, chart URLs cached on page load for AJAX refresh)
 - Charts: yellow entry marker (dot + dashed line) for open positions, only if within visible range
 - Trade modal: min ROI warning if selected ROI < breakeven, auto-adds min option to combobox
+- **Backtest emulation**: chain short trades on historical candles
+  - UI: Emulate button in modal with period (1d/1w/1m), timeframe (1m/15m/1h), balance, bet %, ROI
+  - JS engine: opens short at close, closes at TP (low ≤ tp), checks liquidation (cross margin: loss > balance)
+  - Accounts for open/close fees + historical funding rates
+  - Shows trade-by-trade results with entry/exit/net/balance/duration
+  - Chart with green (TP) / red (loss/liq) markers generated server-side
+  - Liquidation time shown from start of emulation
 - Recent Shorts with entry/exit prices, fees, net profit, duration, balance delta
 - Fee breakdown popup: closing profit, funding fee, opening fee, closing fee, position PnL
 - Color rules: positive=blue +, negative=red -, zero=grey
