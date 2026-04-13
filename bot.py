@@ -310,7 +310,15 @@ def run_cycle(exchange: Exchange, risk: RiskManager, state: dict, dry_run: bool,
         logger.info("Generating charts...")
         status.start_phase("Rendering", 0)  # total set inside generate_charts
         try:
-            chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols, status)
+            # Build entry data for open positions (for chart markers)
+            pos_entries = {}
+            for ep in exchange_positions:
+                if ep["side"] == "short":
+                    pos_entries[ep["symbol"]] = {
+                        "price": ep.get("entry_price", 0),
+                        "timestamp_ms": ep.get("timestamp", 0),
+                    }
+            chart_map = generate_charts_for_symbols(exchange, scan_results, open_position_symbols, status, pos_entries)
         except Exception as e:
             logger.error(f"Error generating charts: {e}")
 

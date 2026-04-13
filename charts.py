@@ -41,11 +41,17 @@ def clear_candles_dir():
 OVERLAP_COLOR = "#f0883e"
 
 
-def generate_chart(closes: list[float], symbol: str, timeframe: str, overlap_candles: int = 0) -> str | None:
+ENTRY_COLOR = "#f0b429"
+
+
+def generate_chart(closes: list[float], symbol: str, timeframe: str,
+                   overlap_candles: int = 0, entry_idx: int = None,
+                   entry_price: float = None) -> str | None:
     """
     Generate a single chart PNG.
     overlap_candles: if > 0, draw a vertical marker line showing where the
     finer-resolution chart starts (counted from the right edge).
+    entry_idx/entry_price: if provided and within visible range, draw entry marker.
     Returns the filename relative to output/ or None on error.
     """
     if not closes or len(closes) < 2:
@@ -83,9 +89,20 @@ def generate_chart(closes: list[float], symbol: str, timeframe: str, overlap_can
             marker_x = len(closes) - overlap_candles
             ax.axvline(x=marker_x, color=OVERLAP_COLOR, linewidth=1, linestyle="--", zorder=6, alpha=0.7)
 
-        # Remove all axes, labels, borders
+        # Lock geometry before optional markers
         ax.set_xlim(0, len(closes) - 1)
         ax.margins(y=0.05)
+        y_min, y_max = ax.get_ylim()
+
+        # Entry marker — only if within visible range (don't change geometry)
+        if (entry_idx is not None and entry_price is not None
+                and 0 <= entry_idx < len(closes)
+                and y_min <= entry_price <= y_max):
+            ax.scatter([entry_idx], [entry_price], color=ENTRY_COLOR, s=80, zorder=8, edgecolors='none')
+            ax.scatter([entry_idx], [entry_price], color=ENTRY_COLOR, s=250, alpha=0.2, zorder=7, edgecolors='none')
+            ax.axhline(y=entry_price, color=ENTRY_COLOR, linewidth=0.7, linestyle='--', alpha=0.4, zorder=5)
+            ax.set_ylim(y_min, y_max)  # re-enforce
+
         ax.axis("off")
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
@@ -139,11 +156,11 @@ def _get_chart_symbols(scan_results: list[dict], open_position_symbols: set = No
     return list(chart_symbols)
 
 
-def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None, status=None) -> dict:
+def generate_charts_for_symbols(exchange, scan_results: list[dict], open_position_symbols: set = None, status=None, position_entries: dict = None) -> dict:
     """
     Generate charts for top scan results + open positions.
     Reuses cached 15m candles from scan phase.
-    Fetches 1m and 1h in parallel.
+    position_entries: {symbol: {"price": float, "timestamp_ms": int}} for entry markers.
     Returns {symbol: {"1m": "candles/BTC_USDT_1m.png", ...}}
     """
     from concurrent.futures import ThreadPoolExecutor
@@ -163,9 +180,13 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict], open_positio
         if cached:
             candles_cache[sr["symbol"]] = cached
 
+    # Build entry lookup
+    entries = position_entries or {}
+
     def _generate_one(symbol):
         """Fetch missing candles and generate all charts for one symbol."""
         short_name = symbol.split("/")[0].split(":")[0]
+        entry_info = entries.get(symbol)
         result = {}
         for tf in TIMEFRAMES:
             if tf == "15m" and symbol in candles_cache:
@@ -175,8 +196,22 @@ def generate_charts_for_symbols(exchange, scan_results: list[dict], open_positio
             if not candles or len(candles) < 2:
                 continue
             closes = [c[4] for c in candles]
+            timestamps = [c[0] for c in candles]
             overlap = OVERLAP_CANDLES.get(tf, 0)
-            filename = generate_chart(closes, symbol, tf, overlap_candles=overlap)
+
+            # Find entry candle index for this timeframe
+            e_idx = None
+            e_price = None
+            if entry_info:
+                e_price = entry_info["price"]
+                e_ts = entry_info["timestamp_ms"]
+                for ci, ts in enumerate(timestamps):
+                    if ts >= e_ts:
+                        e_idx = ci
+                        break
+
+            filename = generate_chart(closes, symbol, tf, overlap_candles=overlap,
+                                      entry_idx=e_idx, entry_price=e_price)
             if filename:
                 result[tf] = filename
         logger.info(f"  {short_name} — {len(result)} charts")
