@@ -13,3 +13,4 @@ dist/
 build/
 output/
 .DS_Store
+.worktrees/
