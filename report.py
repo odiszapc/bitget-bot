@@ -10,6 +10,7 @@ from positions import build_position_data
 logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = "output"
+APPLE_TOUCH_ICON_FILENAME = "apple-touch-icon.png"
 
 
 def _load_version() -> str:
@@ -20,9 +21,43 @@ def _load_version() -> str:
         return "unknown"
 
 
+def _ensure_apple_touch_icon() -> None:
+    """Generate output/apple-touch-icon.png (180x180) once if missing.
+
+    iOS "Add to Home Screen" uses this PNG instead of the SVG favicon.
+    Idempotent: skips if file already exists.
+    """
+    icon_path = os.path.join(OUTPUT_DIR, APPLE_TOUCH_ICON_FILENAME)
+    if os.path.exists(icon_path):
+        return
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        # 360x360 px (2x for retina sharpness; iOS accepts any size and scales)
+        fig = plt.figure(figsize=(1.8, 1.8), dpi=200, facecolor="#0d1117")
+        ax = fig.add_axes([0, 0, 1, 1])
+        ax.set_facecolor("#0d1117")
+        # Thai Baht "฿" (U+0E3F) in DejaVu Sans — visually identical to Bitcoin ₿,
+        # which is missing from the bundled font. iOS clips to a rounded square,
+        # so leave ~12% safe padding around the glyph.
+        ax.text(0.5, 0.5, "\u0e3f", fontsize=110, fontweight="bold",
+                color="#f7931a", ha="center", va="center",
+                family="DejaVu Sans")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        fig.savefig(icon_path, facecolor="#0d1117", dpi=200)
+        plt.close(fig)
+        logger.info(f"Generated apple-touch-icon at {icon_path}")
+    except Exception as e:
+        logger.warning(f"Failed to generate apple-touch-icon: {e}")
+
+
 def generate_report(state: dict, exchange_positions: list[dict], current_balance: float, exchange=None, cycle_info: dict = None):
     """Generate output/index.html with current stats and open positions."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    _ensure_apple_touch_icon()
 
     now_dt = datetime.now(timezone.utc)
     now = now_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -585,6 +620,11 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bitget Short Bot</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='26' text-anchor='middle' font-family='Arial,sans-serif' font-size='28' font-weight='bold' fill='%23f7931a'>&#x20bf;</text></svg>">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Short Bot">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{
