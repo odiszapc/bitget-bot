@@ -474,8 +474,8 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
                 <span class="label">Bet</span>
                 <select class="bet-pct-select" onchange="updateExposure(this, {leverage})">
                     <option value="5">5%</option>
-                    <option value="10">10%</option>
-                    <option value="20" selected>20%</option>
+                    <option value="10" selected>10%</option>
+                    <option value="20">20%</option>
                     <option value="30">30%</option>
                     <option value="50">50%</option>
                     <option value="100">100%</option>
@@ -1924,7 +1924,7 @@ function doShort(symbol, btn) {{
     var row = btn.closest(".modal-trade-row");
     var betSelect = row.querySelector(".bet-pct-select");
     var tpSelect = row.querySelector(".tp-roi-select");
-    var betPct = betSelect ? parseInt(betSelect.value) : 20;
+    var betPct = betSelect ? parseInt(betSelect.value) : 10;
     var tpRoi = tpSelect ? parseFloat(tpSelect.value) : 3;
 
     var modal = btn.closest(".modal-content");
