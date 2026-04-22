@@ -113,6 +113,9 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
             est_tp_net += gross - close_fee
     wallet_balance = current_balance - total_unrealized  # total includes unrealized
     est_balance_at_tp = wallet_balance + est_tp_net
+    # Projected profit from day 0 assuming all open positions close at TP
+    est_profit_vs_start = (est_balance_at_tp - start_balance) if start_balance > 0 else 0.0
+    est_profit_vs_start_pct = (est_profit_vs_start / start_balance * 100) if start_balance > 0 else 0.0
 
     position_rows = ""
     position_modals = ""
@@ -1722,11 +1725,15 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     </div>
     <div class="card">
         <div class="label">Est. Balance at TP</div>
-        <div class="value {'positive' if est_tp_net > 0 else ('negative' if est_tp_net < 0 else 'muted')}">{est_balance_at_tp:.2f} <small style="font-size:12px">({est_tp_net:+.2f} / {f"{est_tp_net / wallet_balance * 100:+.1f}" if wallet_balance > 0 else "0.0"}%)</small></div>
+        <div class="value {'positive' if est_tp_net > 0 else ('negative' if est_tp_net < 0 else 'muted')}">{est_balance_at_tp:.2f}<small style="font-size:12px;display:block;margin-top:2px">({est_tp_net:+.2f} / {f"{est_tp_net / wallet_balance * 100:+.1f}" if wallet_balance > 0 else "0.0"}%)</small></div>
+    </div>
+    <div class="card">
+        <div class="label">Estimated Profit</div>
+        <div class="value {'positive' if est_profit_vs_start > 0 else ('negative' if est_profit_vs_start < 0 else 'muted')}">{est_profit_vs_start:+.2f}<small style="font-size:12px;display:block;margin-top:2px">USDT ({est_profit_vs_start_pct:+.1f}%)</small></div>
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
-        <div class="value neutral">{start_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT{f" ({start_date_display})" if start_date_display else ""}</small></div>
+        <div class="value neutral">{start_balance:.2f}{f'<small style="font-size:12px;color:#6e7681;display:block;margin-top:2px">{start_date_display}</small>' if start_date_display else ""}</div>
     </div>
     <div class="card">
         <div class="label">Total Trades</div>
