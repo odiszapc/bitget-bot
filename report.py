@@ -1708,6 +1708,10 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
 
 <div class="cards">
     <div class="card">
+        <div class="label">Estimated Profit</div>
+        <div class="value {'positive' if est_profit_vs_start > 0 else ('negative' if est_profit_vs_start < 0 else 'muted')}">{est_profit_vs_start:+.2f}<small style="font-size:12px;display:block;margin-top:2px">{est_balance_at_tp:.2f} ({est_profit_vs_start_pct:+.1f}%)</small></div>
+    </div>
+    <div class="card">
         <div class="label">Balance</div>
         <div class="value neutral">{current_balance:.2f} <small style="font-size:12px;color:#6e7681">USDT</small></div>
     </div>
@@ -1726,10 +1730,6 @@ def generate_report(state: dict, exchange_positions: list[dict], current_balance
     <div class="card">
         <div class="label">Est. Balance at TP</div>
         <div class="value {'positive' if est_tp_net > 0 else ('negative' if est_tp_net < 0 else 'muted')}">{est_balance_at_tp:.2f}<small style="font-size:12px;display:block;margin-top:2px">({est_tp_net:+.2f} / {f"{est_tp_net / wallet_balance * 100:+.1f}" if wallet_balance > 0 else "0.0"}%)</small></div>
-    </div>
-    <div class="card">
-        <div class="label">Estimated Profit</div>
-        <div class="value {'positive' if est_profit_vs_start > 0 else ('negative' if est_profit_vs_start < 0 else 'muted')}">{est_profit_vs_start:+.2f}<small style="font-size:12px;display:block;margin-top:2px">USDT ({est_profit_vs_start_pct:+.1f}%)</small></div>
     </div>
     <div class="card">
         <div class="label">Start Balance</div>
